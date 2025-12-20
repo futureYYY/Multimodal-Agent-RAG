@@ -1,0 +1,8 @@
+cd E:\业余\技术项目\multimodal-agent-rag\frontend
+npm run dev
+
+
+
+conda activate agent 
+cd E:\业余\技术项目\multimodal-agent-rag\backend 
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
