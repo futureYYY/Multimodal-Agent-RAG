@@ -64,6 +64,9 @@ async def chat_completions(
                 top_k=data.top_k,
                 score_threshold=data.score_threshold,
                 model_id=data.model_id,
+                rerank_enabled=data.rerank_enabled,
+                rerank_score_threshold=data.rerank_score_threshold,
+                rerank_model_id=data.rerank_model_id,
             ):
                 # 格式化 SSE 事件
                 yield f"event: {event_type}\n"

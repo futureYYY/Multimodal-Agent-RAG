@@ -11,6 +11,7 @@ export interface ChatMessage {
   role: MessageRole;
   content: string;
   citations?: Citation[];
+  original_citations?: Citation[]; // 初排结果
   agentSteps?: AgentStep[];
   timestamp: string;
   isStreaming?: boolean;
@@ -22,6 +23,7 @@ export interface Citation {
   fileName: string;
   location: string;
   score: number;
+  rerank_score?: number;
   content?: string;
   kb_name?: string;
   kb_id?: string;
@@ -59,6 +61,10 @@ export interface ChatRequest {
   mode?: 'normal' | 'agent';
   top_k?: number;
   score_threshold?: number;
+  model_id?: string;
+  rerank_enabled?: boolean;
+  rerank_score_threshold?: number;
+  rerank_model_id?: string;
 }
 
 /** 问题改写请求 */
@@ -83,6 +89,7 @@ export interface AgentThoughtData {
 /** SSE RAG结果事件数据 */
 export interface RagResultData {
   citations: Citation[];
+  original_citations?: Citation[];
 }
 
 /** SSE 回答块事件数据 */

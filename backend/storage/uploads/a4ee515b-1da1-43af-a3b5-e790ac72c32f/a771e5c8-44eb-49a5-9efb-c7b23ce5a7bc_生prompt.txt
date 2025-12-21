@@ -1,0 +1,407 @@
+系统提示：
+你现在是网上聊天恋爱对话生成器，要符合网上聊天对话的场景，生成的对话是女开头然后男回答，女说话是问，男回答是答，角色男：保持自信和高价值幽默海王的形象，不再显得卑微或过分迁就。回答要简短精炼
+
+规则：
+1.不要出现表情
+2.生成的内容尽量简短，且不要重复生成要保证问答的多样化
+3.根据用户的输入，生成符合用户要的对话，无论男女不要一直问问题
+4.要多轮对话
+5.女生在前5次回答都很敷衍，会结束话题，男生通过幽默或者高情商的语言让女生逐渐热情
+6.输出数据是下面示例那样的问答数据，注意：一定先问后答
+
+示例：
+1.
+问：你平时接触的人挺多的吧，肯定很多问喜欢你。
+答：确实认识不少人，但你真的很特别，不一样。
+提示：这段是单轮对话的参考，你要实现的是多轮对话
+2.
+问：你很爱聊天啊。
+答：喜欢有深度的交流。肤浅闲聊提不起兴趣。
+问：哦，是吗？
+答：当然。比如工作压力，背后其实涉及很多社会问题。你怎么看？
+问：我对这个没什么特别的想法。
+答：每个人都有独特见解，只是表达方式不同。
+提示：这是多轮对话要对问答进行延伸，而不是内容延伸
+
+用户：等待用户的输入，设置其他提示或场景
+
+
+server_port=6666
+
+echo "export DASHSCOPE_API_KEY='sk-d7a78db06cd7443683dd7d1af6f25425'" >> ~/.bashrc
+
+source ~/.bashrc
+ 
+echo $DASHSCOPE_API_KEY
+
+
+
+错误：
+CUDA_VISIBLE_DEVICES=0 llamafactory-cli chat \
+--model_name_or_path: /root/autodl-tmp/Llama3.1-8B-Chinese-Chat \
+--template: llama3
+
+
+正确：
+llamafactory-cli webchat examples/inference/qwen.yaml
+错误，各种尝试都试过了 缺少了--model_name_or_path 有就是不行
+llamafactory-cli webchat --model_name_or_path: /root/autodl-tmp/Llama3.1-8B-Chinese-Chat \ --template: llama3 
+
+正确
+CUDA_VISIBLE_DEVICES=0 API_PORT=6006 python src/api.py \
+--model_name_or_path /root/autodl-tmp/Qwen2.5-14B-Instruct \
+--template qwen \
+--infer_backend vllm \
+--vllm_enforce_eager
+
+FORCE_TORCHRUN=1 llamafactory-cli train /root/autodl-tmp/LLaMA-Factory/examples/train_full/qwen2.5-7b-full.yaml
+
+(/root/autodl-tmp/LLaMA-Factory/examples/train_full/llama3_full_sft_ds3.yaml)
+
+
+
+curl -X 'POST' \
+  'http://0.0.0.0:6006/v1/chat/completions' \
+  -H 'accept: application/json' \
+  -H 'Content-Type: application/json' \
+  -d '{
+  "model": "string",
+  "messages": [
+    {
+      "role": "user",
+      "content": "你为什么加我",
+      "tool_calls": [
+        {
+          "id": "call_default",
+          "type": "function",
+          "function": {
+            "name": "string",
+            "arguments": "string"
+          }
+        }
+      ]
+    }
+  ],
+  "do_sample": true,
+  "temperature": 0,
+  "top_p": 0,
+  "n": 1,
+  "max_tokens": 128,
+  "stream": false
+}'
+
+
+
+
+
+
+#!/bin/bash
+
+
+
+
+webui，
+server_port=6006
+
+
+
+
+
+CUDA_VISIBLE_DEVICES=0 nohup python -m vllm.entrypoints.openai.api_server     --model /root/autodl-tmp/Qwen2.5-14B-Instruct    --served-model-name Qwen2.5-14B-Instruct     --trust-remote-code     --port 11223     --tensor-parallel-size 1     --gpu-memory-utilization 0.5     --load-format safetensors     --dtype auto     --enforce-eage     --max-model-len 2048 > vllm_dev_qwen.log 2>&1 &
+
+
+
+
+
+
+
+
+usage: llamafactory-cli [-h] --model_name_or_path MODEL_NAME_OR_PATH [--adapter_name_or_path ADAPTER_NAME_OR_PATH] [--adapter_folder ADAPTER_FOLDER] [--cache_dir CACHE_DIR]
+                        [--use_fast_tokenizer [USE_FAST_TOKENIZER]] [--no_use_fast_tokenizer] [--resize_vocab [RESIZE_VOCAB]] [--split_special_tokens [SPLIT_SPECIAL_TOKENS]]
+                        [--new_special_tokens NEW_SPECIAL_TOKENS] [--model_revision MODEL_REVISION] [--low_cpu_mem_usage [LOW_CPU_MEM_USAGE]] [--no_low_cpu_mem_usage]
+                        [--quantization_method {bitsandbytes,hqq,eetq}] [--quantization_bit QUANTIZATION_BIT] [--quantization_type {fp4,nf4}] [--double_quantization [DOUBLE_QUANTIZATION]]
+                        [--no_double_quantization] [--quantization_device_map {auto}] [--rope_scaling {linear,dynamic}] [--flash_attn {auto,disabled,sdpa,fa2}] [--shift_attn [SHIFT_ATTN]]
+                        [--mixture_of_depths {convert,load}] [--use_unsloth [USE_UNSLOTH]] [--visual_inputs [VISUAL_INPUTS]] [--moe_aux_loss_coef MOE_AUX_LOSS_COEF]
+                        [--disable_gradient_checkpointing [DISABLE_GRADIENT_CHECKPOINTING]] [--upcast_layernorm [UPCAST_LAYERNORM]] [--upcast_lmhead_output [UPCAST_LMHEAD_OUTPUT]]
+                        [--train_from_scratch [TRAIN_FROM_SCRATCH]] [--infer_backend {huggingface,vllm}] [--vllm_maxlen VLLM_MAXLEN] [--vllm_gpu_util VLLM_GPU_UTIL]
+                        [--vllm_enforce_eager [VLLM_ENFORCE_EAGER]] [--vllm_max_lora_rank VLLM_MAX_LORA_RANK] [--offload_folder OFFLOAD_FOLDER] [--use_cache [USE_CACHE]] [--no_use_cache]
+                        [--infer_dtype {auto,float16,bfloat16,float32}] [--hf_hub_token HF_HUB_TOKEN] [--ms_hub_token MS_HUB_TOKEN] [--export_dir EXPORT_DIR] [--export_size EXPORT_SIZE]
+                        [--export_device {cpu,auto}] [--export_quantization_bit EXPORT_QUANTIZATION_BIT] [--export_quantization_dataset EXPORT_QUANTIZATION_DATASET]
+                        [--export_quantization_nsamples EXPORT_QUANTIZATION_NSAMPLES] [--export_quantization_maxlen EXPORT_QUANTIZATION_MAXLEN] [--export_legacy_format [EXPORT_LEGACY_FORMAT]]
+                        [--export_hub_model_id EXPORT_HUB_MODEL_ID] [--print_param_status [PRINT_PARAM_STATUS]] [--template TEMPLATE] [--dataset DATASET] [--eval_dataset EVAL_DATASET]
+                        [--dataset_dir DATASET_DIR] [--cutoff_len CUTOFF_LEN] [--train_on_prompt [TRAIN_ON_PROMPT]] [--mask_history [MASK_HISTORY]] [--streaming [STREAMING]] [--buffer_size BUFFER_SIZE]
+                        [--mix_strategy {concat,interleave_under,interleave_over}] [--interleave_probs INTERLEAVE_PROBS] [--overwrite_cache [OVERWRITE_CACHE]]
+                        [--preprocessing_num_workers PREPROCESSING_NUM_WORKERS] [--max_samples MAX_SAMPLES] [--eval_num_beams EVAL_NUM_BEAMS] [--ignore_pad_token_for_loss [IGNORE_PAD_TOKEN_FOR_LOSS]]
+                        [--no_ignore_pad_token_for_loss] [--val_size VAL_SIZE] [--packing PACKING] [--neat_packing [NEAT_PACKING]] [--tool_format TOOL_FORMAT] [--tokenized_path TOKENIZED_PATH]
+                        [--use_badam [USE_BADAM]] [--badam_mode {layer,ratio}] [--badam_start_block BADAM_START_BLOCK] [--badam_switch_mode {ascending,descending,random,fixed}]
+                        [--badam_switch_interval BADAM_SWITCH_INTERVAL] [--badam_update_ratio BADAM_UPDATE_RATIO] [--badam_mask_mode {adjacent,scatter}] [--badam_verbose BADAM_VERBOSE]
+                        [--use_galore [USE_GALORE]] [--galore_target GALORE_TARGET] [--galore_rank GALORE_RANK] [--galore_update_interval GALORE_UPDATE_INTERVAL] [--galore_scale GALORE_SCALE]
+                        [--galore_proj_type {std,reverse_std,right,left,full}] [--galore_layerwise [GALORE_LAYERWISE]] [--pref_beta PREF_BETA] [--pref_ftx PREF_FTX]
+                        [--pref_loss {sigmoid,hinge,ipo,kto_pair,orpo,simpo}] [--dpo_label_smoothing DPO_LABEL_SMOOTHING] [--kto_chosen_weight KTO_CHOSEN_WEIGHT] [--kto_rejected_weight KTO_REJECTED_WEIGHT]
+                        [--simpo_gamma SIMPO_GAMMA] [--ppo_buffer_size PPO_BUFFER_SIZE] [--ppo_epochs PPO_EPOCHS] [--ppo_score_norm [PPO_SCORE_NORM]] [--ppo_target PPO_TARGET]
+                        [--ppo_whiten_rewards [PPO_WHITEN_REWARDS]] [--ref_model REF_MODEL] [--ref_model_adapters REF_MODEL_ADAPTERS] [--ref_model_quantization_bit REF_MODEL_QUANTIZATION_BIT]
+                        [--reward_model REWARD_MODEL] [--reward_model_adapters REWARD_MODEL_ADAPTERS] [--reward_model_quantization_bit REWARD_MODEL_QUANTIZATION_BIT] [--reward_model_type {lora,full,api}]
+                        [--additional_target ADDITIONAL_TARGET] [--lora_alpha LORA_ALPHA] [--lora_dropout LORA_DROPOUT] [--lora_rank LORA_RANK] [--lora_target LORA_TARGET]
+                        [--loraplus_lr_ratio LORAPLUS_LR_RATIO] [--loraplus_lr_embedding LORAPLUS_LR_EMBEDDING] [--use_rslora [USE_RSLORA]] [--use_dora [USE_DORA]] [--pissa_init [PISSA_INIT]]
+                        [--pissa_iter PISSA_ITER] [--pissa_convert [PISSA_CONVERT]] [--create_new_adapter [CREATE_NEW_ADAPTER]] [--freeze_trainable_layers FREEZE_TRAINABLE_LAYERS]
+                        [--freeze_trainable_modules FREEZE_TRAINABLE_MODULES] [--freeze_extra_modules FREEZE_EXTRA_MODULES] [--pure_bf16 [PURE_BF16]] [--stage {pt,sft,rm,ppo,dpo,kto}]
+                        [--finetuning_type {lora,freeze,full}] [--use_llama_pro [USE_LLAMA_PRO]] [--freeze_vision_tower [FREEZE_VISION_TOWER]] [--no_freeze_vision_tower]
+                        [--train_mm_proj_only [TRAIN_MM_PROJ_ONLY]] [--compute_accuracy [COMPUTE_ACCURACY]] [--plot_loss [PLOT_LOSS]] [--do_sample [DO_SAMPLE]] [--no_do_sample] [--temperature TEMPERATURE]
+                        [--top_p TOP_P] [--top_k TOP_K] [--num_beams NUM_BEAMS] [--max_length MAX_LENGTH] [--max_new_tokens MAX_NEW_TOKENS] [--repetition_penalty REPETITION_PENALTY]
+                        [--length_penalty LENGTH_PENALTY] [--default_system DEFAULT_SYSTEM]
+
+
+
+API
+{
+  "model": "string",
+  "messages": [
+    {
+      "role": "user",
+      "content": "string",
+      "tool_calls": [
+        {
+          "id": "string",
+          "type": "function",
+          "function": {
+            "name": "string",
+            "arguments": "string"
+          }
+        }
+      ]
+    }
+  ],
+  "do_sample": true,
+  "temperature": 0,
+  "top_p": 0,
+  "n": 1,
+  "max_tokens": 0,
+  "stop": "string",
+  "stream": false
+}
+
+
+
+
+
+
+FORCE_TORCHRUN=1 llamafactory-cli train \
+    --stage sft \
+    --do_train True \
+    --model_name_or_path /root/autodl-tmp/Llama3.1-8B-Chinese-Chat \
+    --preprocessing_num_workers 16 \
+    --finetuning_type full \
+    --template llama3 \
+    --flash_attn auto \
+    --dataset_dir /root/LLaMA-Factory/data \
+    --dataset 克劳德data,小熊后期优化data,魅男没优化data \
+    --cutoff_len 1024 \
+    --learning_rate 0.0005 \
+    --num_train_epochs 2.0 \
+    --max_samples 100000 \
+    --per_device_train_batch_size 2 \
+    --gradient_accumulation_steps 8 \
+    --lr_scheduler_type cosine \
+    --max_grad_norm 1.0 \
+    --logging_steps 5 \
+    --save_steps 50 \
+    --warmup_steps 0 \
+    --optim adamw_torch \
+    --packing False \
+    --report_to none \
+    --output_dir saves/LLaMA3-8B-Chinese-Chat/full/train_2024-10-31-15-55-12 \
+    --bf16 True \
+    --plot_loss True \
+    --ddp_timeout 180000000 \
+    --include_num_input_tokens_seen True 
+
+
+torchrun  --standalone --nnodes=1 --nproc-per-node=8  src/train.py \
+--stage sft \
+--model_name_or_path /root/autodl-tmp/Llama3.1-8B-Chinese-Chat  \
+--do_train \
+--dataset 克劳德data,小熊后期优化data,魅男没优化data \
+--template llama3 \
+--finetuning_type full \
+--output_dir  saves/LLaMA3-8B-Chinese-Chat/full/train_2024-10-31-15-55-12 \
+--overwrite_cache \
+--per_device_train_batch_size 1 \
+--gradient_accumulation_steps 16 \
+--lr_scheduler_type cosine \
+--logging_steps 100 \
+--save_steps 500 \
+--learning_rate 5e-4 \
+--num_train_epochs 1.0 \
+--plot_loss \
+--bf16
+
+
+
+accelerate launch \
+--config_file /root/.cache/huggingface/accelerate/default_config.yaml    \
+src/train.py training_config.yaml
+
+
+
+deepspeed --num_gpus 6 src/train.py \
+--preprocessing_num_workers 16 \
+--cutoff_len 512 \
+--deepspeed examples/deepspeed/ds_z3_config.json \
+--stage sft \
+--model_name_or_path /root/autodl-tmp/Llama3.1-8B-Chinese-Chat  \
+--do_train \
+--dataset 小熊后期优化data \
+--template llama3 \
+--finetuning_type lora \
+--output_dir  saves/LLaMA3-8B-Chinese-Chat/lora/train_2024-10-31-17-22-06 \
+--overwrite_cache \
+--per_device_train_batch_size 1 \
+--gradient_accumulation_steps 12 \
+--lr_scheduler_type cosine \
+--logging_steps 10 \
+--save_steps 500 \
+--learning_rate 5e-4 \
+--num_train_epochs 9.0 \
+--plot_loss \
+--bf16
+ 
+modelscope download --model Qwen/Qwen2.5-7B-Instruct --local_dir /root/autodl-tmp/Qwen2.5-7B-Instruct
+
+git lfs install
+git clone https://hf-mirror.com/shibing624/chinese-text-correction-7b
+
+pip install nvitop
+nvitop
+
+
+accelerate launch \
+--config_file /root/.cache/huggingface/accelerate/default_config.yaml    \
+src/train.py training_config.yaml
+
+
+
+
+torchrun  --standalone --nnodes=1 --nproc-per-node=8  src/train.py \
+--stage sft \
+--model_name_or_path /root/autodl-tmp/Llama3.1-8B-Chinese-Chat  \
+--do_train \
+--dataset alpaca_en_demo \
+--template llama3 \
+--finetuning_type lora \
+--output_dir  saves/llama3-8b/lora/ \
+--overwrite_cache \
+--per_device_train_batch_size 1 \
+--gradient_accumulation_steps 8 \
+--lr_scheduler_type cosine \
+--logging_steps 100 \
+--save_steps 500 \
+--learning_rate 1e-4 \
+--num_train_epochs 2.0 \
+--plot_loss \
+--bf16
+
+
+安装git lfs
+
+curl -s https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh | sudo bash
+sudo apt-get install git-lfs
+git lfs install
+
+在swift中把模型整成api调用的形式在apipost上终于测试成功了
+http://localhost:7860/v1/chat/completions
+请求参数如下
+{
+ "model": "qwen2_5-14b-instruct",
+ "messages": [{"role": "user", "content": "你是谁？"}],
+ "stream":false
+ }
+#感觉不用请求头也行 下次测试看看
+参数名Content-Type 参数值application/json
+
+试了以前llama-factory开放的api  也能正常返回 有点不理解上次怎么失败 （也有可能是model参数没指定好）
+{
+  "model": "qwen2_5-14b-instruct",
+  "messages": [
+    {
+      "role": "user",
+      "content": "你为什么加我",
+      "tool_calls": [
+        {
+          "id": "call_default",
+          "type": "function",
+          "function": {
+            "name": "string",
+            "arguments": "string"
+          }
+        }
+      ]
+    }
+  ],
+  "do_sample": true,
+  "temperature": 0,
+  "top_p": 0,
+  "n": 1,
+  "max_tokens": 128,
+  "stream": false
+} 
+
+
+你现在是优秀的格式转化器，给你提供json文件是未转化的，未转化的字段如下："instruction"，"input"，"output"，"system"，"history" ，这是即将要转化后的字段：{"system": "00001", "query": "EEEEE", "response": "FFFFF", "history": [["query1", "response1"], ["query2", "response2"]]} ，提示：将"instruction"的内容替换成外层的"query"字段的内容，"input"忽略，"output"的内容替换成外层的"response"字段里的内容，"system"字段内容填充到替换后"system"的字段内容，"history" 里面有多个问答，按照转化后来填充 
+
+你现在在扮演高情商海王的角色，对于“我”的各种刁难提问，你要回答的不丢失面子，也给对方台阶下
+
+
+
+
+- Role: 文本纠错专家
+- Background: 用户需要对文本内容进行纠正，要求直接在原文中进行修改，以确保文本的准确性和专业性。
+- Profile: 你是一位专业的文本纠错专家，拥有深厚的语言文字学背景和丰富的编辑经验，擅长直接对文本进行纠正，确保文本的准确性和流畅性。
+- Skills: 你具备高级的语法分析能力、词汇辨识能力以及对不同文体的深刻理解，能够快速准确地识别并直接纠正文本中的错误。
+- Goals: 直接在用户提供的文本中纠正错误，包括拼写、语法、标点符号等，提升文本的准确性和可读性。
+- Constrains: 必须确保文本的原始意义不被曲解，同时保持文本的流畅性和专业性。
+- OutputFormat: 直接在原文中进行修改，并提供修改后的内容。
+- Workflow:
+  1. 仔细阅读用户提供的文本，识别出所有可能的错误。
+  2. 分析每个错误的性质，直接在原文中进行修改。
+  3. 确保修改后的内容保持原文的意图和风格，同时提升文本的质量。
+  4. 改动后给我可下载和我上传同名的docx文件
+- Examples:
+  - 例子1：原文：“我们计划明天去爬山，天气应该会很好。” 修改后：“我们计划明天去爬山，天气应该会很好。”（无错误）
+  - 例子2：原文：“我昨天买的衣服，颜色太艳了。” 修改后：“我昨天买的衣服，颜色太鲜艳了。”（将“艳”改为“鲜艳”以增强描述性）
+  - 例子3：原文：“他很高，跑得很快。” 修改后：“他很高，并且跑得很快。”（增加连词“并且”以提高句子连贯性）
+- Initialization: 在第一次对话中，请直接输出以下：您好，我是您的文本纠错助手。请提供需要纠正的文本，我将直接在原文中进行修改，以确保文本的准确性和专业性。
+
+
+任务：记住我上面的prompt提示词模版 在那个模版的基础上 我加入以下要求：对我的文件全部处理完不许偷懒 处理过程是 对我的文件按照要求直接修改 输出修改后（不需要修改的过程）完整的文本 在把这个文本给我转成和我上传同名的docx文件
+
+
+
+
+
+我现在做的项目是搭建rag系统做帮助男性约会的各种问答，数据都是各种情感导师的视频文字等，主要是数据的处理遇到了麻烦，1.视频转录的文字，有很多错误的，比如读音相同不同字等，还有上一句说的半句话，到下一个自然段才把上一句的后面半句话说完 而且还有很多废话对搭建rag没有帮助 这样怎么处理，我已经尝试以下方法：1.用开源的文本纠错项目pycorrector，做也能做但是一长段的文本就会报错，输出也是json到时候我还得转化成文本很麻烦 2.用大模型来做文本纠错 豆包，chatgpt4等效果不是很好 我prompt写的很清晰了 但是从头到尾处理我的数据帮我纠错效果不好 也会各种偷懒和对我的文本进行总结，可我不需要总结啊 3.现在是用了秘塔写作猫帮我做纠错 给我数据哪些建议改的都标出来了，我点一下替换可以直接替换，但是这样文本处理很麻烦 我还得从头到尾检查有没有其他错误的，就很麻烦，我现在很迷茫怎么对数据快速的处理，错误文本纠正过来，不需要人一个字一个字看 但是我是一个人做啊 没人帮我 ，还要搭建rag，还要其他的模型微调
+
+
+
+
+
+手动复制粘贴法
+这是最基础的方法，适合字幕量较少且时间充裕的情况。直接播放视频，逐句暂停，然后将字幕内容手动复制粘贴到文本编辑器中。虽然比较耗时费力，但能保证较高的准确性，尤其适用于对字幕准确性要求极高且格式较为简单的情况。
+使用视频播放软件的字幕导出功能
+VLC 播放器：一款功能强大的开源视频播放器，支持多种视频格式。在播放有字幕的视频时，点击 “字幕” 菜单，选择 “字幕轨道”，再点击 “保存字幕”，即可将字幕文件导出为.srt 等常见的字幕格式。之后，可以使用文本编辑器打开该字幕文件，对其内容进行整理和编辑。
+PotPlayer：它也具备字幕提取功能。播放视频时，右键点击画面，选择 “字幕” - “字幕管理器”，在弹出的窗口中找到相应的字幕轨道，点击 “另存为” 按钮，将字幕保存为文本格式。这种方式操作较为便捷，适合大多数常见的字幕类型。
+利用在线字幕提取工具
+Subtitle Extractor：这是一个专门用于从视频中提取字幕的在线工具。用户只需上传视频文件，它会自动识别并提取视频中的字幕文本，最后将提取的字幕以文本格式呈现给用户，用户可以直接复制使用。不过，该工具可能对视频格式和字幕类型有一定的限制，且对于一些复杂的字幕效果可能不太理想。
+Online-Convert：除了常见的文件格式转换功能外，也支持视频字幕的提取。用户上传视频后，选择提取字幕的选项，它会尝试从视频中提取字幕并转换为可编辑的文本格式供用户下载。其优点是支持多种视频格式，但同样可能存在一定的识别准确率问题。
+通过字幕编辑软件进行提取
+Aegisub：专业的字幕编辑软件，可用于创建、编辑和转换字幕文件。导入带有字幕的视频后，它能够解析视频中的字幕信息，并将其以文本形式显示在编辑界面中。用户可以方便地对字幕文本进行修改、整理，然后将其保存为纯文本文件或其他所需的字幕格式。
+Subtitle Workshop：这款软件也提供了类似的功能。通过导入视频，它可以识别并提取字幕文本，支持对字幕的各种编辑操作，如合并、拆分、调整时间轴等。编辑完成后，可以将字幕导出为纯文本格式，以便进一步整理和使用。
+借助 OCR 技术提取字幕
+如果视频中的字幕是图像形式的硬字幕，可以使用光学字符识别（OCR）工具来提取字幕文本。例如，Tesseract OCR 是一个开源的 OCR 引擎，结合一些图像预处理和后处理技术，可以将视频字幕的图像帧转换为可编辑的文本。首先需要使用截图工具或视频处理软件截取包含字幕的图像帧，然后通过 Tesseract OCR 对这些图像进行识别，最后将识别结果进行整理和校正，得到最终的字幕文本。不过，这种方法的准确率可能会受到图像质量、字幕字体、颜色等因素的影响，需要对识别结果进行仔细的检查和修正。
+VLC 播放器的字幕轨道是灰的点不了怎么回事
+基于 4 个搜索来源
+VLC 播放器的字幕轨道是灰的点不了，可能是以下原因导致的：
+字幕文件与视频文件不匹配：字幕文件的基本名需与视频文件一致，例如，视频文件名 abc.mkv，字幕文件应为 abc.srt 或者 abc.chs.srt 等，并放在同一文件夹，这样 VLC 才能自动识别并加载字幕，否则字幕轨道可能会显示为灰色无法点击.
+视频格式不支持自动加载字幕：某些特殊的视频格式可能不支持自动加载外挂字幕文件，从而导致字幕轨道选项变灰 。此时，可以尝试在视频设置里手动添加字幕，通常在 “字幕” 菜单中有 “添加字幕文件” 的选项，找到对应的字幕文件进行添加.
+未安装支持外挂字幕的播放器插件或应用未更新：如果设备未安装支持外挂字幕的播放器插件，或者使用的 VLC 播放器版本过低，可能会出现字幕轨道无法点击的问题。建议检查并安装相关插件，或更新 VLC 播放器到最新版本.
+字幕编码格式问题：如果字幕文件的编码格式与 VLC 播放器不兼容，也可能导致字幕无法正常加载和轨道变灰。可以尝试使用文本编辑器打开字幕文件，将其另存为 UTF-8 等常见编码格式，再重新在 VLC 中加载字幕.
+视频本身的字幕设置问题：有些视频可能本身带有嵌入式字幕，且其字幕属性设置为不可更改或隐藏，这会导致 VLC 播放器的字幕轨道选项变灰。这种情况下，可以尝试使用一些视频编辑软件，将视频中的字幕提取出来，保存为外挂字幕文件，再按照上述匹配文件名等方法进行加载.

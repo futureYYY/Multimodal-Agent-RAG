@@ -89,6 +89,7 @@ class FileStatusResponse(BaseModel):
     status: str
     progress: int
     error_message: Optional[str] = None
+    chunk_count: int = 0
     created_at: datetime
 
     class Config:
@@ -133,14 +134,18 @@ class VectorizeResponse(BaseModel):
 class RecallRequest(BaseModel):
     """召回测试请求"""
     query: str = Field(..., min_length=1)
-    top_k: int = Field(default=3, ge=1, le=20)
+    top_k: int = Field(default=3, ge=1, le=100)
     score_threshold: float = Field(default=0.0, ge=0.0, le=1.0)
+    rerank_enabled: bool = False
+    rerank_score_threshold: float = Field(default=0.0, ge=0.0, le=1.0)
+    rerank_model_id: Optional[str] = None
 
 
 class RecallResult(BaseModel):
     """召回结果"""
     chunkId: Optional[str] = None
     score: float
+    rerank_score: Optional[float] = None
     content: str
     fileName: str
     kbName: str
@@ -189,6 +194,9 @@ class ChatRequest(BaseModel):
     top_k: Optional[int] = 3
     score_threshold: Optional[float] = 0.3
     model_id: Optional[str] = None
+    rerank_enabled: bool = False
+    rerank_score_threshold: float = 0.0
+    rerank_model_id: Optional[str] = None
 
 
 # ==================== SSE 事件 ====================
@@ -202,6 +210,7 @@ class AgentThoughtEvent(BaseModel):
 class RagResultEvent(BaseModel):
     """RAG 结果事件"""
     citations: List[RecallResult]
+    original_citations: Optional[List[RecallResult]] = None
 
 
 class AnswerChunkEvent(BaseModel):
@@ -219,10 +228,11 @@ class DoneEvent(BaseModel):
 class CustomModelCreate(BaseModel):
     """创建自定义模型请求"""
     name: str = Field(..., min_length=1, description="模型显示名称")
-    model_type: str = Field(..., description="模型类型 (llm, embedding, vlm)")
+    model_type: str = Field(..., description="模型类型 (llm, embedding, vlm, rerank)")
     base_url: str = Field(..., description="API Base URL")
     api_key: str = Field(..., description="API Key")
     model_name: str = Field(..., description="实际模型名称 (如 gpt-4)")
+    context_length: int = Field(default=4096, description="上下文长度")
 
 
 class CustomModelUpdate(BaseModel):
@@ -232,6 +242,7 @@ class CustomModelUpdate(BaseModel):
     api_key: Optional[str] = None
     model_name: Optional[str] = None
     model_type: Optional[str] = None # 虽然一般不改类型，但作为可选字段
+    context_length: Optional[int] = None
 
 
 class CustomModelResponse(BaseModel):
@@ -241,6 +252,7 @@ class CustomModelResponse(BaseModel):
     model_type: str
     base_url: str
     model_name: str
+    context_length: int = 4096
     is_active: bool
 
     class Config:

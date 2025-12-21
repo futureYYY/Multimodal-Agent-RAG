@@ -68,7 +68,12 @@ const MultiFilePreview: React.FC = () => {
       
       // 如果是“统一查看”模式，展示 pending_confirm 或 parsed 的文件
       if (isViewMode) {
-          validFiles = validFiles.filter(f => f.status === 'pending_confirm' || f.status === 'parsed');
+          // 仅展示已完成 (parsed) 的文件
+          validFiles = validFiles.filter(f => f.status === 'parsed');
+      } else {
+          // “统一解析”预览模式：
+          // 过滤掉已完成 (parsed) 的文件，只展示需要处理的（失败的 failed、新上传的 uploaded 等）
+          validFiles = validFiles.filter(f => f.status !== 'parsed');
       }
       
       setFiles(validFiles);
@@ -478,9 +483,18 @@ const MultiFilePreview: React.FC = () => {
               style={{ borderRight: 0 }}
             >
               {files.map(file => (
-                <Menu.Item key={file.id} icon={<FileTextOutlined />}>
+                <Menu.Item 
+                    key={file.id} 
+                    icon={<FileTextOutlined />}
+                    style={{ height: 'auto', padding: '8px 16px', lineHeight: 1.5 }}
+                >
                   <div className={styles.fileItem}>
-                      <span className={styles.fileName} title={file.name}>{file.name}</span>
+                      <div className={styles.fileInfo}>
+                        <span className={styles.fileName} title={file.name}>{file.name}</span>
+                        <span className={styles.fileMeta}>
+                           {(file.chunk_count || 0)} chunks
+                        </span>
+                      </div>
                       {file.status === 'parsed' && <CheckCircleOutlined style={{ color: '#52c41a' }} />}
                   </div>
                 </Menu.Item>

@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
-import { Card, Select, Button, Input, Spin, Collapse, Tag, message, Segmented, Slider, Divider, Space, Tooltip, Modal } from 'antd';
+import { Card, Select, Button, Input, Spin, Collapse, Tag, message, Segmented, Slider, Divider, Space, Tooltip, Modal, Switch, Typography } from 'antd';
 import {
   SendOutlined,
   StopOutlined,
@@ -14,6 +14,8 @@ import {
   RobotOutlined,
   MessageOutlined,
   SettingOutlined,
+  DeleteOutlined,
+  QuestionCircleOutlined,
 } from '@ant-design/icons';
 import { PageHeader, MarkdownRenderer, EmptyState } from '@/components/common';
 import { getKnowledgeBaseList, getModelList, rewriteQuery, createChatStream } from '@/services';
@@ -22,11 +24,15 @@ import type { ChatMessage, AgentStep, Citation, KnowledgeBase, ModelInfo } from 
 import styles from './Chat.module.css';
 
 const { Panel } = Collapse;
+const { Paragraph } = Typography;
 
 interface ChatConfig {
   kbIds: string[];
   topK: number;
   scoreThreshold: number;
+  rerankEnabled: boolean;
+  rerankScoreThreshold: number;
+  rerankModelId?: string;
 }
 
 const Chat: React.FC = () => {
@@ -36,19 +42,36 @@ const Chat: React.FC = () => {
 
   const { knowledgeBases, setKnowledgeBases, models, setModels } = useAppStore();
   
+  // 派生 rerankModels
+  const rerankModels = (models || []).filter((m) => m.type === 'rerank');
+  
   // 从 store 中只解构需要的变量，避免解构 messages 等已被本地状态替代的变量
   const {
     selectedModel,
     setSelectedModel,
-    isGenerating,
-    setIsGenerating,
-    abortController,
-    setAbortController,
+    // isGenerating, // Removed: 使用新的分离状态
+    // setIsGenerating, // Removed
+    // abortController, // Removed
+    // setAbortController, // Removed
+    isAgentGenerating,
+    setAgentGenerating,
+    isNormalGenerating,
+    setNormalGenerating,
+    agentAbortController,
+    setAgentAbortController,
+    normalAbortController,
+    setNormalAbortController,
+    agentMessages,
+    setAgentMessages,
+    normalMessages,
+    setNormalMessages,
   } = useChatStore();
 
   const [inputValue, setInputValue] = useState('');
   const [rewriting, setRewriting] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const shouldAutoScrollRef = useRef(true);
   
   // 详情弹窗状态
   const [citationModalVisible, setCitationModalVisible] = useState(false);
@@ -57,10 +80,18 @@ const Chat: React.FC = () => {
   // 模式状态
   const [chatMode, setChatMode] = useState<'normal' | 'agent'>('agent');
   
-  // 独立的消息状态
-  const [agentMessages, setAgentMessages] = useState<ChatMessage[]>([]);
-  const [normalMessages, setNormalMessages] = useState<ChatMessage[]>([]);
-  
+  // 当前模式的衍生状态
+  const isGenerating = chatMode === 'normal' ? isNormalGenerating : isAgentGenerating;
+  const setIsGenerating = (val: boolean) => {
+    if (chatMode === 'normal') setNormalGenerating(val);
+    else setAgentGenerating(val);
+  };
+  const abortController = chatMode === 'normal' ? normalAbortController : agentAbortController;
+  const setAbortController = (ctrl: (() => void) | null) => {
+    if (chatMode === 'normal') setNormalAbortController(ctrl);
+    else setAgentAbortController(ctrl);
+  };
+
   // 当前显示的 messages 引用
   const messages = chatMode === 'normal' ? normalMessages : agentMessages;
   
@@ -90,12 +121,18 @@ const Chat: React.FC = () => {
     kbIds: [],
     topK: 3,
     scoreThreshold: 0.3,
+    rerankEnabled: true,
+    rerankScoreThreshold: 0.0,
+    rerankModelId: undefined,
   });
 
   const [agentConfig, setAgentConfig] = useState<ChatConfig>({
     kbIds: [],
     topK: 3,
     scoreThreshold: 0.3,
+    rerankEnabled: true,
+    rerankScoreThreshold: 0.0,
+    rerankModelId: undefined,
   });
 
   // 获取当前模式的配置
@@ -129,6 +166,14 @@ const Chat: React.FC = () => {
           setSelectedModel(llmModels[0].id);
         }
 
+        // 设置默认 Rerank 模型
+        const rerankModels = (Array.isArray(modelData) ? modelData : []).filter((m: ModelInfo) => m.type === 'rerank');
+        if (rerankModels.length > 0) {
+           const defaultRerankId = rerankModels[0].id;
+           setNormalConfig(prev => ({ ...prev, rerankModelId: defaultRerankId }));
+           setAgentConfig(prev => ({ ...prev, rerankModelId: defaultRerankId }));
+        }
+
         // URL 参数预选知识库 (仅针对当前默认模式 - Agent)
         if (urlKbId && (Array.isArray(kbData) ? kbData : []).some((kb: KnowledgeBase) => kb.id === urlKbId)) {
           setAgentConfig(prev => ({ ...prev, kbIds: [urlKbId] }));
@@ -141,9 +186,19 @@ const Chat: React.FC = () => {
     init();
   }, []);
 
+  // 处理滚动事件
+  const handleScroll = () => {
+    if (messagesContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } = messagesContainerRef.current;
+      // 如果距离底部小于 100px，则允许自动滚动
+      const isBottom = scrollHeight - scrollTop - clientHeight < 100;
+      shouldAutoScrollRef.current = isBottom;
+    }
+  };
+
   // 自动滚动到底部
   useEffect(() => {
-    if (isGenerating || messages.length > 0) {
+    if ((isGenerating || messages.length > 0) && shouldAutoScrollRef.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [messages, isGenerating]);
@@ -171,6 +226,12 @@ const Chat: React.FC = () => {
   // 发送消息
   const handleSend = async () => {
     if (!inputValue.trim() || isGenerating) return;
+
+    // 发送新消息时强制滚动到底部
+    shouldAutoScrollRef.current = true;
+
+    // 捕获当前的 chatMode，供闭包内使用
+    const capturedChatMode = chatMode;
 
     const userMessage: ChatMessage = {
       id: generateMessageId(),
@@ -208,11 +269,13 @@ const Chat: React.FC = () => {
         
         displayContent += targetContent.slice(displayContent.length, displayContent.length + step);
         
-        updateMessage(assistantMessage.id, {
-          content: displayContent,
-        });
-        
-        messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
+        // 使用 capturedChatMode 更新消息
+        const setter = capturedChatMode === 'normal' ? setNormalMessages : setAgentMessages;
+        setter(prev => prev.map(msg => msg.id === assistantMessage.id ? { 
+            ...msg, 
+            content: displayContent 
+        } : msg));
+
         animationFrameId = requestAnimationFrame(animateTypewriter);
       }
     };
@@ -229,6 +292,9 @@ const Chat: React.FC = () => {
         top_k: currentConfig.topK,
         score_threshold: currentConfig.scoreThreshold,
         model_id: selectedModel,
+        rerank_enabled: currentConfig.rerankEnabled,
+        rerank_score_threshold: currentConfig.rerankScoreThreshold,
+        rerank_model_id: currentConfig.rerankModelId,
       },
       {
           onAgentThought: (data) => {
@@ -236,12 +302,15 @@ const Chat: React.FC = () => {
               type: data.step,
               content: data.content,
               timestamp: new Date().toISOString(),
+              duration: data.duration, // 后端返回的耗时
+              cost: data.cost, // 总耗时
             };
             
             // 获取当前最新的消息列表
             // 注意：这里不能直接用 messages 闭包，需要用 setXxx 的回调或者 ref
             // 但为了简单，我们重新实现 updateMessage 的逻辑
-            const setter = chatMode === 'normal' ? setNormalMessages : setAgentMessages;
+            // 使用 capturedChatMode 来确保回调更新的是发起请求时的模式
+            const setter = capturedChatMode === 'normal' ? setNormalMessages : setAgentMessages;
             setter(prev => {
                 const msgs = [...prev];
                 const msgIndex = msgs.findIndex(m => m.id === assistantMessage.id);
@@ -255,12 +324,16 @@ const Chat: React.FC = () => {
           },
           onRagResult: (data) => {
              // 同样的逻辑更新 citations
-            const setter = chatMode === 'normal' ? setNormalMessages : setAgentMessages;
+            const setter = capturedChatMode === 'normal' ? setNormalMessages : setAgentMessages;
             setter(prev => {
                 const msgs = [...prev];
                 const msgIndex = msgs.findIndex(m => m.id === assistantMessage.id);
                 if (msgIndex > -1) {
-                    msgs[msgIndex] = { ...msgs[msgIndex], citations: data.citations };
+                    msgs[msgIndex] = { 
+                      ...msgs[msgIndex], 
+                      citations: data.citations,
+                      original_citations: data.original_citations
+                    };
                 }
                 return msgs;
             });
@@ -275,12 +348,24 @@ const Chat: React.FC = () => {
         },
         onDone: () => {
           const finish = () => {
-             updateMessage(assistantMessage.id, {
-               content: accumulatedContent,
-               isStreaming: false,
-             });
-             setIsGenerating(false);
-             setAbortController(null);
+             // 这里的 updateMessage 依赖 chatMode 状态，如果用户切换了模式，会导致更新错误的消息列表
+             // 应该使用 capturedChatMode
+             const setter = capturedChatMode === 'normal' ? setNormalMessages : setAgentMessages;
+             setter(prev => prev.map(msg => msg.id === assistantMessage.id ? { 
+                 ...msg, 
+                 content: accumulatedContent,
+                 isStreaming: false 
+             } : msg));
+
+             // 清理生成状态
+             if (capturedChatMode === 'normal') {
+                 setNormalGenerating(false);
+                 setNormalAbortController(null);
+             } else {
+                 setAgentGenerating(false);
+                 setAgentAbortController(null);
+             }
+
              cancelAnimationFrame(animationFrameId);
           };
 
@@ -292,27 +377,47 @@ const Chat: React.FC = () => {
         },
         onError: (error) => {
           cancelAnimationFrame(animationFrameId);
-          updateMessage(assistantMessage.id, {
-            content: '发生错误，请重试',
-            error: error.message,
-            isStreaming: false,
-            // 即使出错，如果有引用，也保留引用
-            // citations: useChatStore.getState().messages.find(m => m.id === assistantMessage.id)?.citations || [],
-          });
-          setIsGenerating(false);
-          setAbortController(null);
+          console.error('Chat Error:', error);
+          
+          const setter = capturedChatMode === 'normal' ? setNormalMessages : setAgentMessages;
+          setter(prev => prev.map(msg => msg.id === assistantMessage.id ? { 
+             ...msg, 
+             content: `发生错误，请重试: ${error.message || '未知错误'}`,
+             error: error.message,
+             isStreaming: false 
+          } : msg));
+
+          if (capturedChatMode === 'normal') {
+             setNormalGenerating(false);
+             setNormalAbortController(null);
+          } else {
+             setAgentGenerating(false);
+             setAgentAbortController(null);
+          }
         },
       }
     );
 
-    setAbortController(() => abort);
+    // 设置 controller
+    if (chatMode === 'normal') {
+        setNormalAbortController(() => abort);
+    } else {
+        setAgentAbortController(() => abort);
+    }
   };
 
   // 停止生成
   const handleStop = () => {
-    abortController?.();
-    setIsGenerating(false);
-    setAbortController(null);
+    // 停止当前的 controller
+    if (chatMode === 'normal') {
+        normalAbortController?.();
+        setNormalGenerating(false);
+        setNormalAbortController(null);
+    } else {
+        agentAbortController?.();
+        setAgentGenerating(false);
+        setAgentAbortController(null);
+    }
   };
 
   // 重试
@@ -328,21 +433,55 @@ const Chat: React.FC = () => {
 
   // 渲染 Agent 思考步骤
   const renderAgentSteps = (steps: AgentStep[]) => {
-    const stepLabels: Record<string, string> = {
-      thinking: '分析意图',
-      decision: '判定检索',
-      action: '调用工具',
-      response: '生成回复',
-    };
-
     return (
-      <Collapse ghost className={styles.agentSteps}>
-        <Panel header="思考过程" key="steps">
+      <Collapse ghost size="small" className={styles.agentSteps} defaultActiveKey={['steps']}>
+        <Panel 
+          header={
+            <Space>
+              <RobotOutlined />
+              <span>思考过程</span>
+              {steps.length > 0 && steps[steps.length - 1].cost && (
+                  <span style={{ color: '#888', fontSize: '12px', marginLeft: '8px' }}>
+                      总耗时: {Number(steps[steps.length - 1].cost).toFixed(2)}s
+                  </span>
+              )}
+            </Space>
+          } 
+          key="steps"
+        >
           <div className={styles.stepList}>
             {steps.map((step, index) => (
               <div key={index} className={styles.stepItem}>
-                <Tag color="blue">{stepLabels[step.type] || step.type}</Tag>
-                <span className={styles.stepContent}>{step.content}</span>
+                <Tag color={
+                  step.type === 'thinking' ? 'blue' :
+                  step.type === 'action' ? 'orange' :
+                  step.type === 'decision' ? 'green' :
+                  step.type === 'response' ? 'purple' : 'default'
+                }>
+                  {step.type === 'thinking' ? '分析意图' :
+                   step.type === 'action' ? '调用工具' :
+                   step.type === 'decision' ? '判定检索' :
+                   step.type === 'response' ? '生成回复' : step.type}
+                </Tag>
+                <div className={styles.stepContent} style={{ flex: 1, minWidth: 0 }}>
+                    <Paragraph 
+                        ellipsis={{ 
+                            rows: 2, 
+                            expandable: true, 
+                            symbol: '展开',
+                            onExpand: (e, info) => console.log('Expand:', info)
+                        }}
+                        style={{ marginBottom: 0, color: 'inherit' }}
+                        title={undefined} // 禁用原生 title 提示，避免重复
+                    >
+                        {step.content}
+                    </Paragraph>
+                </div>
+                {step.duration && (
+                    <span style={{ color: '#aaa', fontSize: '12px', marginLeft: '8px', flexShrink: 0 }}>
+                        {Number(step.duration).toFixed(2)}s
+                    </span>
+                )}
               </div>
             ))}
           </div>
@@ -352,13 +491,13 @@ const Chat: React.FC = () => {
   };
 
   // 渲染引用来源
-  const renderCitations = (citations: Citation[]) => {
+  const renderCitations = (citations: Citation[], title: string = "参考来源") => {
     if (citations.length === 0) return null;
 
     return (
       <Collapse ghost className={styles.citations}>
         <Panel
-          header={`参考来源 (${citations.length})`}
+          header={`${title} (${citations.length})`}
           key="citations"
           extra={<LinkOutlined />}
         >
@@ -387,6 +526,9 @@ const Chat: React.FC = () => {
                   </Tooltip>
                   <Tag>{citation.location || '未知位置'}</Tag>
                   <Tag color="green">相似度: {citation.score.toFixed(3)}</Tag>
+                  {citation.rerank_score !== undefined && citation.rerank_score !== null && (
+                      <Tag color="purple">Rerank: {citation.rerank_score.toFixed(3)}</Tag>
+                  )}
                 </div>
                 {citation.content && (
                   <div 
@@ -465,7 +607,12 @@ const Chat: React.FC = () => {
             )}
           </div>
 
-          {!isUser && msg.citations && renderCitations(msg.citations)}
+          {!isUser && (
+              <>
+                  {msg.citations && renderCitations(msg.citations, msg.original_citations?.length ? "参考来源 (Rerank)" : "参考来源")}
+                  {msg.original_citations && msg.original_citations.length > 0 && renderCitations(msg.original_citations, "初排结果 (Embedding)")}
+              </>
+          )}
         </div>
       </div>
     );
@@ -478,6 +625,7 @@ const Chat: React.FC = () => {
       <PageHeader
         title="智能对话"
         subtitle="基于知识库的智能问答"
+        onBack={() => navigate(-1)}
         extra={
           <Segmented
             value={chatMode}
@@ -531,12 +679,21 @@ const Chat: React.FC = () => {
                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                  <SettingOutlined />
                  <span style={{ whiteSpace: 'nowrap' }}>Top K: {currentConfig.topK}</span>
+                 <Tooltip title={
+                    <div style={{ fontSize: '12px' }}>
+                        <div><b>策略：分库/分任务检索 + 汇总重排</b></div>
+                        <div style={{ marginTop: 4 }}>此处 Top K 指<b>单次检索/单知识库</b>的召回数量。</div>
+                        <div style={{ marginTop: 4 }}>系统会汇总所有检索结果（总量可能 &gt; Top K），再经 Rerank 优选出最终回答依据。</div>
+                    </div>
+                 }>
+                    <QuestionCircleOutlined style={{ color: '#999', cursor: 'help' }} />
+                 </Tooltip>
                  <Slider 
-                   min={1} max={10} 
-                   value={currentConfig.topK}
-                   onChange={(val) => setCurrentConfig({ topK: val })}
-                   style={{ width: 100 }}
-                 />
+                          min={1} max={100} 
+                          value={currentConfig.topK}
+                          onChange={(val) => setCurrentConfig({ topK: val })}
+                          style={{ width: 100 }}
+                        />
                </div>
                
                <Divider type="vertical" style={{ height: 24 }} />
@@ -550,6 +707,38 @@ const Chat: React.FC = () => {
                    style={{ width: 100 }}
                  />
                </div>
+
+               <Divider type="vertical" style={{ height: 24 }} />
+
+               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                 <Switch 
+                    checkedChildren="Rerank" 
+                    unCheckedChildren="Rerank"
+                    checked={currentConfig.rerankEnabled}
+                    onChange={(checked) => setCurrentConfig({ rerankEnabled: checked })}
+                 />
+                 {currentConfig.rerankEnabled && (
+                    <>
+                        <Select
+                            placeholder="选择 Rerank 模型"
+                            value={currentConfig.rerankModelId}
+                            onChange={(val) => setCurrentConfig({ rerankModelId: val })}
+                            style={{ width: 160 }}
+                            options={rerankModels.map((m) => ({
+                                value: m.id,
+                                label: m.name,
+                            }))}
+                        />
+                        <span style={{ whiteSpace: 'nowrap' }}>阈值: {currentConfig.rerankScoreThreshold}</span>
+                        <Slider 
+                          min={0} max={1} step={0.01}
+                          value={currentConfig.rerankScoreThreshold}
+                          onChange={(val) => setCurrentConfig({ rerankScoreThreshold: val })}
+                          style={{ width: 100 }}
+                        />
+                    </>
+                 )}
+               </div>
              </Space>
           </div>
         </div>
@@ -557,7 +746,11 @@ const Chat: React.FC = () => {
 
       {/* 对话区 */}
       <Card className={styles.chatCard}>
-        <div className={styles.messagesContainer}>
+        <div 
+          className={styles.messagesContainer}
+          ref={messagesContainerRef}
+          onScroll={handleScroll}
+        >
           {messages.length === 0 ? (
             <EmptyState
               title={chatMode === 'agent' ? 'Agent 智能问答' : '知识库对话'}
@@ -575,6 +768,23 @@ const Chat: React.FC = () => {
 
         {/* 输入区 */}
         <div className={styles.inputArea}>
+          <div className={styles.inputToolbar} style={{ marginBottom: 8, display: 'flex', justifyContent: 'flex-end' }}>
+             <Tooltip title="清除上下文（开启新对话）">
+                <Button 
+                    type="text"
+                    icon={<DeleteOutlined />} 
+                    onClick={() => {
+                        Modal.confirm({
+                            title: '确认清除上下文？',
+                            content: '清除后将开始新的对话，之前的记忆将丢失。',
+                            onOk: clearMessages,
+                        });
+                    }}
+                >
+                    清除上下文
+                </Button>
+            </Tooltip>
+          </div>
           <Input.TextArea
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
@@ -641,7 +851,11 @@ const Chat: React.FC = () => {
                <Tag color="orange">{selectedCitation.kb_name || '未知知识库'}</Tag>
                <Tag color="blue">{selectedCitation.fileName || '未知文件'}</Tag>
                <Tag>{selectedCitation.location || '未知位置'}</Tag>
-               <Tag color="green">相似度: {selectedCitation.score.toFixed(3)}</Tag>
+               <Tag color="green">
+                  {selectedCitation.rerank_score 
+                    ? `Rerank: ${selectedCitation.rerank_score.toFixed(3)}` 
+                    : `相似度: ${selectedCitation.score.toFixed(3)}`}
+               </Tag>
             </div>
             <div style={{ whiteSpace: 'pre-wrap', lineHeight: '1.6', fontSize: '15px' }}>
                 {selectedCitation.image_path ? (

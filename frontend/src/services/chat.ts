@@ -36,6 +36,8 @@ export const createChatStream = (
 ): { abort: () => void } => {
   const controller = new AbortController();
 
+  console.log('Chat Request Payload:', JSON.stringify(data, null, 2));
+
   fetch('/api/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -46,7 +48,9 @@ export const createChatStream = (
   })
     .then(async (response) => {
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const errorText = await response.text().catch(() => '');
+        console.error('Fetch failed:', response.status, response.statusText, errorText);
+        throw new Error(`HTTP error! status: ${response.status} ${response.statusText} - ${errorText.slice(0, 100)}`);
       }
 
       const reader = response.body?.getReader();
@@ -56,6 +60,8 @@ export const createChatStream = (
 
       const decoder = new TextDecoder();
       let buffer = '';
+      let currentEventType: SSEEventType | null = null;
+      let isDone = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -67,7 +73,7 @@ export const createChatStream = (
 
         for (const line of lines) {
           if (line.startsWith('event:')) {
-            const eventType = line.slice(6).trim() as SSEEventType;
+            currentEventType = line.slice(6).trim() as SSEEventType;
             continue;
           }
 
@@ -78,21 +84,40 @@ export const createChatStream = (
             try {
               const eventData = JSON.parse(dataStr);
 
-              // 根据数据结构判断事件类型
-              if ('step' in eventData) {
-                handlers.onAgentThought?.(eventData as AgentThoughtData);
-              } else if ('citations' in eventData) {
-                handlers.onRagResult?.(eventData as RagResultData);
-              } else if ('content' in eventData && typeof eventData.content === 'string') {
-                handlers.onAnswerChunk?.(eventData as AnswerChunkData);
-              } else if ('usage' in eventData || Object.keys(eventData).length === 0) {
-                handlers.onDone?.(eventData as DoneData);
+              // 如果有明确的 eventType，优先处理
+              if (currentEventType === 'error') {
+                 throw new Error(eventData.error || 'Unknown error');
               }
-            } catch (e) {
+
+              // 根据数据结构或 eventType 判断事件类型
+              if (currentEventType === 'thought' || 'step' in eventData) {
+                handlers.onAgentThought?.(eventData as AgentThoughtData);
+              } else if (currentEventType === 'rag' || 'citations' in eventData) {
+                handlers.onRagResult?.(eventData as RagResultData);
+              } else if (currentEventType === 'answer' || ('content' in eventData && typeof eventData.content === 'string')) {
+                handlers.onAnswerChunk?.(eventData as AnswerChunkData);
+              } else if (currentEventType === 'done' || 'usage' in eventData || Object.keys(eventData).length === 0) {
+                handlers.onDone?.(eventData as DoneData);
+                isDone = true;
+              }
+              
+              // 重置 eventType (通常 SSE 是一对 event/data)
+              currentEventType = null; 
+            } catch (e: any) {
               console.error('Failed to parse SSE data:', e);
+              // 如果是业务错误，传递给 onError
+              if (currentEventType === 'error' || (e.message && e.message !== 'Unexpected end of JSON input')) {
+                  handlers.onError?.(e);
+                  return; // 停止处理
+              }
             }
           }
         }
+      }
+      
+      // 如果流结束但没有收到 done 事件，手动触发 done
+      if (!isDone) {
+        handlers.onDone?.({} as DoneData);
       }
     })
     .catch((error) => {

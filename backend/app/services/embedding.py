@@ -104,20 +104,28 @@ class EmbeddingService:
         # 使用 requests 替代 httpx 以避免 InvalidURL: URL too long 问题
         # 这是一个临时的同步调用，运行在 Celery 线程中是可以接受的
         import requests
+        import copy
+
+        # Process in batches (Doubao Multimodal API might require single item per request, so default to 1)
+        batch_size = 1
+        total_texts = len(texts)
         
-        for text in texts:
-            try:
-                # 构造 Doubao 格式 input
+        for i in range(0, total_texts, batch_size):
+            batch_texts = texts[i : i + batch_size]
+            print(f"DEBUG_EMBED_DOUBAO: Processing batch {i // batch_size + 1}/{(total_texts + batch_size - 1) // batch_size}, size={len(batch_texts)}")
+            
+            batch_input = []
+            
+            for text in batch_texts:
+                # 构造 Doubao 格式 input (单个样本)
                 # 检查 text 是否包含图片占位符 [图片: xxx]
-                input_data = []
+                sample_input = []
                 
                 if text.startswith("[图片: ") and text.endswith("]"):
                      # 提取图片路径
                      image_path_str = text[5:-1]
                      
                      # 构造完整路径 (假设图片存储在 settings.IMAGE_DIR)
-                     # image_path_str 可能是相对路径，也可能包含文件名
-                     # 如果是 chunk 里的路径，通常是 uuid_page_idx.png
                      full_image_path = os.path.join(settings.IMAGE_DIR, image_path_str)
                      
                      if os.path.exists(full_image_path):
@@ -128,12 +136,11 @@ class EmbeddingService:
                                  # 获取扩展名以确定 mime type
                                  ext = os.path.splitext(image_path_str)[1].lower().replace('.', '')
                                  if ext == 'jpg': ext = 'jpeg'
-                                 # 默认 png
                                  if not ext: ext = 'png'
                                  
                                  data_uri = f"data:image/{ext};base64,{encoded_string}"
                                  
-                                 input_data.append({
+                                 sample_input.append({
                                      "type": "image_url", 
                                      "image_url": {
                                          "url": data_uri
@@ -142,48 +149,72 @@ class EmbeddingService:
                          except Exception as img_err:
                              print(f"DEBUG_EMBED_DOUBAO: Image processing failed: {img_err}")
                              # Fallback to text if image fails
-                             input_data.append({"type": "text", "text": text})
+                             sample_input.append({"type": "text", "text": text})
                      else:
                          print(f"DEBUG_EMBED_DOUBAO: Image not found at {full_image_path}")
-                         # 尝试在 static/images 下查找 (如果是相对路径)
-                         # 但 settings.IMAGE_DIR 应该是绝对路径或者相对于 cwd 的路径
-                         input_data.append({"type": "text", "text": text})
+                         sample_input.append({"type": "text", "text": text})
                 else:
-                     # 确保 text 不为空，如果为空或者只是空白字符，API 可能会报错
-                     # 如果是空字符串，替换为占位符或者跳过？
-                     # 根据报错 MissingParameter, input[0].text，说明传了空字符串
                      clean_text = text.strip()
                      if not clean_text:
-                         clean_text = " " # 使用一个空格代替空文本，或者更有意义的占位符 "empty content"
+                         clean_text = " " 
                      
-                     input_data.append({"type": "text", "text": clean_text})
+                     sample_input.append({"type": "text", "text": clean_text})
+                
+                batch_input.append(sample_input)
+
+            # 发送批量请求
+            try:
+                # 如果 batch_size 为 1，解包一层 list，因为 API 可能不接受 List[List[Dict]]
+                final_input = batch_input
+                if len(batch_input) == 1:
+                    final_input = batch_input[0]
 
                 payload = {
                     "model": model_id,
-                    "input": input_data
+                    "input": final_input
                 }
                 
                 # 打印调试信息：Payload (脱敏处理)
-                import copy
                 debug_payload = copy.deepcopy(payload)
                 if "input" in debug_payload:
-                    debug_input = []
-                    for item in debug_payload["input"]:
-                        if item.get("type") == "image_url":
-                            url_val = item.get("image_url", {}).get("url", "")
-                            if len(url_val) > 50:
-                                debug_input.append({
-                                    "type": "image_url",
-                                    "image_url": {"url": url_val[:50] + "...(truncated)"}
-                                })
-                            else:
-                                debug_input.append(item)
-                        else:
-                            debug_input.append(item)
-                    debug_payload["input"] = debug_input
-                print(f"DEBUG_EMBED_DOUBAO: Payload: {debug_payload}")
+                    # 如果是 list of list
+                    if isinstance(debug_payload["input"], list) and len(debug_payload["input"]) > 0 and isinstance(debug_payload["input"][0], list):
+                         debug_input = []
+                         for sample in debug_payload["input"]:
+                             debug_sample = []
+                             for item in sample:
+                                 if item.get("type") == "image_url":
+                                     url_val = item.get("image_url", {}).get("url", "")
+                                     if len(url_val) > 50:
+                                         debug_sample.append({
+                                             "type": "image_url",
+                                             "image_url": {"url": url_val[:50] + "...(truncated)"}
+                                         })
+                                     else:
+                                         debug_sample.append(item)
+                                 else:
+                                     debug_sample.append(item)
+                             debug_input.append(debug_sample)
+                         debug_payload["input"] = debug_input
+                    # 如果是 list of dict (single item unwrapped)
+                    elif isinstance(debug_payload["input"], list):
+                         debug_sample = []
+                         for item in debug_payload["input"]:
+                             if item.get("type") == "image_url":
+                                 url_val = item.get("image_url", {}).get("url", "")
+                                 if len(url_val) > 50:
+                                     debug_sample.append({
+                                         "type": "image_url",
+                                         "image_url": {"url": url_val[:50] + "...(truncated)"}
+                                     })
+                                 else:
+                                     debug_sample.append(item)
+                             else:
+                                 debug_sample.append(item)
+                         debug_payload["input"] = debug_sample
+                
+                # print(f"DEBUG_EMBED_DOUBAO: Payload (Batch): {debug_payload}")
 
-                # 使用 requests.post (同步)
                 response = requests.post(
                     url,
                     headers={
@@ -191,36 +222,49 @@ class EmbeddingService:
                         "Content-Type": "application/json",
                     },
                     json=payload,
-                    timeout=60.0,
+                    timeout=120.0, 
                     verify=False
                 )
 
                 if response.status_code != 200:
                     print(f"DEBUG_EMBED_DOUBAO: Error Status: {response.status_code}")
                     print(f"DEBUG_EMBED_DOUBAO: Error Body: {response.text}")
-                    # 尝试捕获更详细的错误
                     raise Exception(f"Doubao API Error ({response.status_code}): {response.text}")
                 
                 result = response.json()
-                # Doubao 返回格式可能略有不同，通常是 data.embedding 或 data[0].embedding
-                # 某些多模态模型返回的是 {"data": {"embedding": [...]}} 而不是 OpenAI 风格的 {"data": [{"embedding": ...}]}
+                
                 if "data" in result:
                     data_field = result["data"]
-                    if isinstance(data_field, dict) and "embedding" in data_field:
-                         # 格式 1: {"data": {"embedding": [...]}}
-                         embeddings.append(data_field["embedding"])
-                    elif isinstance(data_field, list) and len(data_field) > 0 and "embedding" in data_field[0]:
-                         # 格式 2: {"data": [{"embedding": [...]}]} (OpenAI style)
-                         embeddings.append(data_field[0]["embedding"])
+                    
+                    # 情况1: 返回 List (标准 Batch)
+                    if isinstance(data_field, list):
+                         if len(data_field) > 0 and "index" in data_field[0]:
+                             data_field.sort(key=lambda x: x["index"])
+                         
+                         for item in data_field:
+                             if "embedding" in item:
+                                 embeddings.append(item["embedding"])
+                             else:
+                                 print(f"DEBUG_EMBED_DOUBAO: Item missing embedding: {item}")
+                                 raise Exception("Doubao API response item missing embedding")
+                    
+                    # 情况2: 返回 Dict (Single Item)
+                    elif isinstance(data_field, dict):
+                         if "embedding" in data_field:
+                             embeddings.append(data_field["embedding"])
+                         else:
+                             print(f"DEBUG_EMBED_DOUBAO: Data dict missing embedding: {data_field}")
+                             raise Exception("Doubao API response data missing embedding")
+                    
                     else:
-                         print(f"DEBUG_EMBED_DOUBAO: Unknown data structure: {data_field}")
-                         raise Exception("Doubao API response format error: unknown data structure")
+                         print(f"DEBUG_EMBED_DOUBAO: Unexpected data structure: {type(data_field)}")
+                         raise Exception("Doubao API response format error: data is not list or dict")
                 else:
                     print(f"DEBUG_EMBED_DOUBAO: Invalid Response Format (missing 'data'): {result}")
-                    raise Exception("Doubao API response format error: missing data/embedding")
+                    raise Exception("Doubao API response format error: missing data")
                     
             except Exception as e:
-                print(f"DEBUG_EMBED_DOUBAO: Failed for text snippet: {e}")
+                print(f"DEBUG_EMBED_DOUBAO: Failed for batch: {e}")
                 raise e
         
         return embeddings

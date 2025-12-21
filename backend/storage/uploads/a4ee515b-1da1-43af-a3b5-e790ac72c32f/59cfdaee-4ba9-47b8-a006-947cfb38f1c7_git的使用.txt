@@ -1,0 +1,137 @@
+展示远程仓库存在的各个分支名称
+git branch -r
+想知道当前分支与哪个远程分支关联
+git branch -v
+
+已经更新了源码没有出现任务错误信息
+使用 git pull 命令从远程仓库拉取最新的更改，并将它们合并到你的当前分支中。这会自动尝试合并远程仓库中的更改和你本地的更改。
+git pull origin main
+如果你不确定远程仓库的默认分支名称是 main 还是 master，可以先用 git branch -r 查看远程分支列表，然后选择正确的分支名进行拉取。
+
+
+
+
+如果你已经通过 git clone 命令克隆了 GitHub 上的项目（例如：https://github.com/modelscope/ms-swift.git），并且该项目有新的更新，你可以按照以下步骤来更新本地源代码。以下是详细的更新流程：
+
+1. 进入项目目录
+首先，确保你已经在项目的根目录中。如果不在，请使用 cd 命令进入。
+
+bash
+深色版本
+cd ms-swift
+2. 拉取最新更改
+使用 git pull 命令从远程仓库拉取最新的更改，并将它们合并到你的当前分支中。这会自动尝试合并远程仓库中的更改和你本地的更改。
+
+bash
+深色版本
+git pull origin main
+如果你不确定远程仓库的默认分支名称是 main 还是 master，可以先用 git branch -r 查看远程分支列表，然后选择正确的分支名进行拉取。
+
+3. 解决冲突（如果有）
+如果在拉取或合并过程中出现冲突，Git 会提示你哪些文件存在冲突。你需要手动编辑这些文件来解决冲突，选择保留哪一部分代码。解决冲突后，标记冲突已解决：
+
+bash
+深色版本
+git add <filename>
+然后继续合并过程：
+
+bash
+深色版本
+git commit
+4. 更新子模块（如果有）
+如果你的项目包含子模块，记得也更新子模块到最新版本：
+
+bash
+深色版本
+git submodule update --init --recursive
+5. 检查更新后的状态
+完成上述步骤后，检查一下项目的整体状态，确保一切正常：
+
+bash
+深色版本
+git status
+6. 测试代码
+确保更新后代码仍然可以正常工作。运行测试套件或手动测试关键功能。
+
+7. 推送更改（如果需要）
+如果你在本地做了任何更改并解决了冲突，别忘了将这些更改推送到远程仓库：
+
+bash
+深色版本
+git push origin main
+其他注意事项
+备份：在执行重大更新之前，考虑创建一个备份分支以防止意外丢失工作。
+bash
+深色版本
+git checkout -b backup-before-update
+定期同步：保持定期与远程仓库同步的习惯，这样可以减少一次性合并大量更改时出现问题的风险。
+查看提交历史：如果你想查看最近的提交记录，可以使用以下命令：
+bash
+深色版本
+git log --oneline --graph --all
+通过遵循这些步骤，你应该能够顺利地更新 ms-swift 项目的源代码。如果有更多具体问题或遇到困难，请随时告诉我！
+
+项目开源到github上
+==============================================================================================
+初始化本地仓库：git init
+此目录下会创建一个.git的文件
+git init
+
+=============================================
+将原有的项目文件放在该目录下，然后将该项目纳入.git版本控制中
+
+git add . (一定要注意add和.之间是有空格的，否则会报错的)
+================================================
+将所有更改放到本地暂存区域，等待上传。
+
+git commit -m "docs: translate to zh"（对自己的项目做一些说明）
+
+===============================================
+# 创建并切换到 main 分支
+git branch -M docs-to-zh
+
+====================================================
+连接远程仓库
+
+git remote add origin "https://github.com/GitHub用户名/代码仓库名称.git"
+示例：git remote add origin "https://github.com/futureYYY/ml-engineering.git"
+========================================================
+出现问题 不是自己的仓库不能忘别人的仓库推送不然会报权限不足的问题 
+
+查看当前远程仓库设置
+git remote -v
+
+修改远程仓库地址为你自己的仓库
+git remote set-url origin "https://github.com/futureYYY/ml-engineering.git"
+ 
+再次验证仓库
+git remote -v
+
+然后就可以推送了
+git push -u origin docs-to-zh
+
+=================================
+如果已经 push 到远程仓库，需要强制推送
+
+# 先修改 commit 信息
+git commit --amend -m "docs:translates to zh"
+
+# 然后强制推送
+git push --force origin main
+
+======================================
+其他git 命令
+
+# 查看所有分支
+git branch
+
+切换到 main 分支：
+
+git checkout main
+# 或者使用新的命令
+git switch main
+
+远程删除分支
+git push origin --delete docs-to-zh
+
+

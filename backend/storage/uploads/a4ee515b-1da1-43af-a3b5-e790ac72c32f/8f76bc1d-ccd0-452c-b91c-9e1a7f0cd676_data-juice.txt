@@ -1,0 +1,31 @@
+ Model [/root/.cache/data_juicer/models/ch.sp.model] is not found. Downloading...模型默认下载的路径
+
+github镜像站
+git clone https://ghp.ci/https://github.com/modelscope/data-juicer.git/
+
+
+10.data-juice
+# global parameters
+project_name: 'Data-Juicer-arxivrecipes-arxiv'
+dataset_path: '/path/to/your/dataset'  # path to your dataset directory or file
+export_path: '/path/to/your/dataset.jsonl'
+
+np: 50  # number of subprocess to process your dataset
+open_tracer: true #打开追踪
+
+### 执行处理
+dj-process --config D:\桌面\fb\业余开发\data-juicer\process_data_juice.yaml
+
+
+```shell
+＃处理数据集
+python D:\桌面\fb\业余开发\data-juicer\tools\process_data.py --config  --config D:\桌面\fb\业余开发\data-juicer\process_data_juice.yaml
+python /root/autodl-tmp/data-juicer/tools/process_data.py --config process.yaml
+
+
+＃分析数据集
+python /root/autodl-tmp/data-juicer/tools/analyze_data.py --config analyzer.yaml
+```
+
+数据可视化:
+data-juicer-vis --config configs/demo/visual_demo.yaml

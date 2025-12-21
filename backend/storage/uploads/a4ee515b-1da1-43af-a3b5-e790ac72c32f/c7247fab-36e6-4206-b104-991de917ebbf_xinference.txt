@@ -1,0 +1,256 @@
+启动xinference 指定文件存放路径 指定用魔搭下载模型 
+XINFERENCE_HOME=/root/autodl-tmp/xinference XINFERENCE_MODEL_SRC=modelscope xinference-local --host 0.0.0.0 --port 6006
+pip install nvitop
+nvitop
+
+
+xinference -v #查看版本（原本版本0.16.3升级后1.0.1）
+================================================================================================================================================
+关于模型推理这块 
+使用transfermer做推理大概是模型b量级的俩倍 比如14b模型 *2 =28显存  但要追求推理速度还得vllm作为推理引擎 总结：transfermer省显存 推理慢
+使用vllm做推理大概是模型b量级的3倍 比如14b模型 *3 =42显存 （实际用qwen2.5-14b时显存占用39G）总结：transfermer省显存 推理慢 VLLm 推理快 显存占用也大
+
+
+xinference engine -e http://region-31.seetacloud.com:51734 --model-name glm4-chat-1m（查询适合跑什么推理引擎上）
+
+
+xinference engine -e https://u447386-a8f1-4732c954.bjc1.seetacloud.com:8443 --model-name glm4-chat-1m --model-engine vllm  (查询用vllm跑 适合什么参数)
+
+
+xinference launch --model-engine vllm -e https://u447386-b7e0-be9929a7.bjc1.seetacloud.com:8443   -n qwen2.5-instruct -s 14 -f awq --gpu_memory_utilization 1.0 -q int4（启动qwen2.5  显存占用34.5 要是0.9参数 显存占用39 不指定要41显存）
+
+
+xinference list -e https://u447386-bdeb-7979a090.bjc1.seetacloud.com:8443/（查看当前启动的服务）
+
+
+xinference launch  -e https://u447386-bdeb-7979a090.bjc1.seetacloud.com:8443/   -n bge-large-zh-v1.5 -t embedding（加载bge embedding模型 要指定-t 不然默认是llm）
+
+
+
+xinference launch --model-engine vllm -e https://u447386-bdeb-7979a090.bjc1.seetacloud.com:8443/   -n qwen2.5-instruct -s 14  -q int4 --gpu_memory_utilization 0.5 --gpu-idx 0 -f awq(指定GPU索引 减少显存10% 量化等级awq 格式int4)
+
+xinference launch  -e https://u447386-b7e0-be9929a7.bjc1.seetacloud.com:8443 -n bge-large-zh-v1.5 -t embedding  --gpu-idx 0（加载bge embedding模型）
+
+xinference launch  -e https://u447386-8160-a3a3aee6.bjc1.seetacloud.com:8443 -n bge-reranker-v2-minicpm-layerwise -t rerank  --gpu-idx 0（加载rerank模型）
+
+
+
+
+==============================================================================================================================================
+model
+
+qwen2.5-instruct
+glm4-chat
+
+embedding
+
+bge-large-zh-v1.5（智源研究院研发的一款中文语义向量模型）（1024维 512max tokens）（在中文领域最强）
+bce-embedding-base_v1（网易双语）（768维 512max tokens）（在跨语言领域最强）
+
+rerank
+bce-reranker-base-v1 这个模型在rerank里面最强（自定义的）
+bge-reranker-v2-minicpm-layerwise（魔搭下载）
+
+"requestUrl":  "https://u447386-a8f1-4732c954.bjc1.seetacloud.com:8443/v1/rerank",
+"requestAuth": "Bearer"
+
+
+"reRankModels": [
+   {
+      "model": "bce-reranker-base-v1", // 模型名（与OneAPI对应）
+      "name": "bce-reranker-base-v1", // 模型展示名
+      "requestUrl":  "https://u447386-a8f1-4732c954.bjc1.seetacloud.com:8443/v1/rerank",
+      "requestAuth": "Bearer"
+   }
+ ],
+
+
+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+
+量化方法：awq和gptq
+
+gptq和awq 是俩个不同的量化的等级吗‘’
+基于 5 个搜索来源
+
+GPTQ 和 AWQ 不是两个简单的量化等级，而是两种不同的量化方法，它们在量化的具体实现方式、性能特点等方面存在差异。以下是它们的具体区别：
+量化原理：
+GPTQ：使用分组量化将权重分组为多个子矩阵，然后利用 OBQ（一种量化方法）来量化每个子矩阵，最后通过动态反量化来恢复权重的原始值。其主要侧重于通过这种方式降低量化精度损失，实现高精度的量化，是基于权重本身的特性进行量化操作。
+AWQ：同样先使用组量化将权重分组，但随后使用激活感知的方法来量化每个子矩阵。它的核心思想是根据激活值的分布来确定哪些是重要的权重，并对这些重要权重进行特殊处理，从而减少量化损失。所以它是基于激活值来确定权重的重要性，进而进行更有效的量化。
+性能表现：
+量化精度：一般来说，AWQ 在量化精度方面更优秀，而 GPTQ 的量化精度也较为良好，但相对 AWQ 可能会稍微逊色一些。
+推理速度：AWQ 在推理速度方面具有优势，相比 GPTQ 更快。这是因为其采用的无重新排序的在线反量化等技术，不需要对权重进行重新排序，可以直接在量化后的权重上进行反量化，提高了推理的效率。
+实现难度与适用场景：
+实现难度：GPTQ 相对来说实现难度较低，比较易于应用到各种大语言模型中，适合大多数的 LLM 任务。而 AWQ 的实现可能相对复杂一些，需要对激活值的分布进行分析和处理。
+适用场景：如果对推理速度要求不是特别高，且希望能够较简单地实现模型量化，GPTQ 是一个不错的选择；如果对推理速度有较高要求，并且能够接受相对复杂的实现过程，那么 AWQ 可能更适合，例如在对实时性要求较高的应用场景中。
+量化成本：AWQ 由于其较为复杂的量化过程和对激活值的分析处理，量化成本可能会相对较高；而 GPTQ 的量化成本相对较低。
+
+总结：AWQ量化精度方面更优秀 比GPTQ聪明一点点 同时在推理速度方面也快 但GPTQ实现难度较低  
+=======================================================================================================
+使用量化
+awq的量化方法  int4  使用awq的量化方法  int4  量化后三个权重文件 各3.7 3*3.7=11.1  未量化7*3.7+1.6=27.5  节省了多少内存：27.5-11.1=16.4   
+
+gptq量化方法 int4 int8  使用gptq的量化方法  int4  量化后三个权重文件 2*3.7+1.9=9.3  未量化7*3.7+1.6=27.5  节省了多少内存：27.5-9.3=18.2   （测试过后还是awq更加聪明点） 
+未量化28.6 tokens/s
+INFO 11-23 17:25:06 metrics.py:349] Avg prompt throughput: 942.5 tokens/s, Avg generation throughput: 28.6 tokens/s,
+用awq的量化方法  int4量化后65.3 tokens/s
+NFO 11-23 17:25:11 metrics.py:349] Avg prompt throughput: 0.0 tokens/s, Avg generation throughput: 65.3 tokens/s, Running: 1 reqs, Swapped: 0 reqs, Pending: 0 reqs, GPU KV cache usage: 3.4%, CPU KV cache usage: 0.0%.
+
+
+pip install --upgrade "xinference[all]"
+xinference -v #查看版本（原本版本0.16.3升级后1.0.1）
+
+
+CMAKE_ARGS="-DLLAMA_CUBLAS=on" pip install llama-cpp-python
+
+
+
+pip install 'xinference[sglang]'
+
+自定义内置模型
+xinference registrations --model-type LLM --endpoint https://u447386-bdeb-7979a090.bjc1.seetacloud.com:8443/
+
+释放模型资源（好像有点问题·）
+xinferenceterminate--model-uid qwen2.5-instruct --endpoint https://u447386-bdeb-7979a090.bjc1.seetacloud.com:8443/
+
+释放模型资源（好像有点问题·）
+xinferenceterminate -n qwen2.5-instruct -e https://u447386-bdeb-7979a090.bjc1.seetacloud.com:8443/
+
+自定义model的类型
+==================================================================================================
+ xinference registrations --model-type LLM --endpoint https://u447386-bdeb-7979a090.bjc1.seetacloud.com:8443/
+Type    Name                         Language                                                      Ability                 Is-built-in
+------  ---------------------------  ------------------------------------------------------------  ----------------------  -------------
+LLM     aquila2                      ['zh']                                                        ['generate']            True
+LLM     aquila2-chat                 ['zh']                                                        ['chat']                True
+LLM     aquila2-chat-16k             ['zh']                                                        ['chat']                True
+LLM     baichuan-2                   ['en', 'zh']                                                  ['generate']            True
+LLM     baichuan-2-chat              ['en', 'zh']                                                  ['chat']                True
+LLM     c4ai-command-r-v01           ['en', 'fr', 'de', 'es', 'it', 'pt', 'ja', 'ko', 'zh', 'ar']  ['chat']                True
+LLM     code-llama                   ['en']                                                        ['generate']            True
+LLM     code-llama-instruct          ['en']                                                        ['chat']                True
+LLM     code-llama-python            ['en']                                                        ['generate']            True
+LLM     codegeex4                    ['en', 'zh']                                                  ['chat']                True
+LLM     codeqwen1.5                  ['en', 'zh']                                                  ['generate']            True
+LLM     codeqwen1.5-chat             ['en', 'zh']                                                  ['chat']                True
+LLM     codeshell                    ['en', 'zh']                                                  ['generate']            True
+LLM     codeshell-chat               ['en', 'zh']                                                  ['chat']                True
+LLM     codestral-v0.1               ['en']                                                        ['generate']            True
+LLM     cogvlm2                      ['en', 'zh']                                                  ['chat', 'vision']      True
+LLM     cogvlm2-video-llama3-chat    ['en', 'zh']                                                  ['chat', 'vision']      True
+LLM     csg-wukong-chat-v0.1         ['en']                                                        ['chat']                True
+LLM     deepseek                     ['en', 'zh']                                                  ['generate']            True
+LLM     deepseek-chat                ['en', 'zh']                                                  ['chat']                True
+LLM     deepseek-coder               ['en', 'zh']                                                  ['generate']            True
+LLM     deepseek-coder-instruct      ['en', 'zh']                                                  ['chat']                True
+LLM     deepseek-v2                  ['en', 'zh']                                                  ['generate']            True
+LLM     deepseek-v2-chat             ['en', 'zh']                                                  ['chat']                True
+LLM     deepseek-v2-chat-0628        ['en', 'zh']                                                  ['chat']                True
+LLM     deepseek-v2.5                ['en', 'zh']                                                  ['chat']                True
+LLM     deepseek-vl-chat             ['en', 'zh']                                                  ['chat', 'vision']      True
+LLM     gemma-2-it                   ['en']                                                        ['chat']                True
+LLM     gemma-it                     ['en']                                                        ['chat']                True
+LLM     glm-4v                       ['en', 'zh']                                                  ['chat', 'vision']      True
+LLM     glm-edge-chat                ['en', 'zh']                                                  ['chat']                True
+LLM     glm-edge-v                   ['en', 'zh']                                                  ['chat', 'vision']      True
+LLM     glm4-chat                    ['en', 'zh']                                                  ['chat', 'tools']       True
+LLM     glm4-chat-1m                 ['en', 'zh']                                                  ['chat', 'tools']       True
+LLM     gorilla-openfunctions-v2     ['en']                                                        ['chat']                True
+LLM     gpt-2                        ['en']                                                        ['generate']            True
+LLM     internlm2-chat               ['en', 'zh']                                                  ['chat']                True
+LLM     internlm2.5-chat             ['en', 'zh']                                                  ['chat']                True
+LLM     internlm2.5-chat-1m          ['en', 'zh']                                                  ['chat']                True
+LLM     internvl-chat                ['en', 'zh']                                                  ['chat', 'vision']      True
+LLM     internvl2                    ['en', 'zh']                                                  ['chat', 'vision']      True
+LLM     llama-2                      ['en']                                                        ['generate']            True
+LLM     llama-2-chat                 ['en']                                                        ['chat']                True
+LLM     llama-3                      ['en']                                                        ['generate']            True
+LLM     llama-3-instruct             ['en']                                                        ['chat']                True
+LLM     llama-3.1                    ['en', 'de', 'fr', 'it', 'pt', 'hi', 'es', 'th']              ['generate']            True
+LLM     llama-3.1-instruct           ['en', 'de', 'fr', 'it', 'pt', 'hi', 'es', 'th']              ['chat', 'tools']       True
+LLM     llama-3.2-vision             ['en', 'de', 'fr', 'it', 'pt', 'hi', 'es', 'th']              ['generate', 'vision']  True
+LLM     llama-3.2-vision-instruct    ['en', 'de', 'fr', 'it', 'pt', 'hi', 'es', 'th']              ['chat', 'vision']      True
+LLM     minicpm-2b-dpo-bf16          ['zh']                                                        ['chat']                True
+LLM     minicpm-2b-dpo-fp16          ['zh']                                                        ['chat']                True
+LLM     minicpm-2b-dpo-fp32          ['zh']                                                        ['chat']                True
+LLM     minicpm-2b-sft-bf16          ['zh']                                                        ['chat']                True
+LLM     minicpm-2b-sft-fp32          ['zh']                                                        ['chat']                True
+LLM     MiniCPM-Llama3-V-2_5         ['en', 'zh']                                                  ['chat', 'vision']      True
+LLM     MiniCPM-V-2.6                ['en', 'zh']                                                  ['chat', 'vision']      True
+LLM     minicpm3-4b                  ['zh']                                                        ['chat']                True
+LLM     mistral-instruct-v0.1        ['en']                                                        ['chat']                True
+LLM     mistral-instruct-v0.2        ['en']                                                        ['chat']                True
+LLM     mistral-instruct-v0.3        ['en']                                                        ['chat']                True
+LLM     mistral-large-instruct       ['en', 'fr', 'de', 'es', 'it', 'pt', 'zh', 'ru', 'ja', 'ko']  ['chat']                True
+LLM     mistral-nemo-instruct        ['en', 'fr', 'de', 'es', 'it', 'pt', 'zh', 'ru', 'ja']        ['chat']                True
+LLM     mistral-v0.1                 ['en']                                                        ['generate']            True
+LLM     mixtral-8x22B-instruct-v0.1  ['en', 'fr', 'it', 'de', 'es']                                ['chat']                True
+LLM     mixtral-instruct-v0.1        ['en', 'fr', 'it', 'de', 'es']                                ['chat']                True
+LLM     mixtral-v0.1                 ['en', 'fr', 'it', 'de', 'es']                                ['generate']            True
+LLM     OmniLMM                      ['en', 'zh']                                                  ['chat', 'vision']      True
+LLM     openhermes-2.5               ['en']                                                        ['chat']                True
+LLM     opt                          ['en']                                                        ['generate']            True
+LLM     orion-chat                   ['en', 'zh']                                                  ['chat']                True
+LLM     orion-chat-rag               ['en', 'zh']                                                  ['chat']                True
+LLM     phi-2                        ['en']                                                        ['generate']            True
+LLM     phi-3-mini-128k-instruct     ['en']                                                        ['chat']                True
+LLM     phi-3-mini-4k-instruct       ['en']                                                        ['chat']                True
+LLM     platypus2-70b-instruct       ['en']                                                        ['generate']            True
+LLM     qwen-chat                    ['en', 'zh']                                                  ['chat']                True
+LLM     qwen-vl-chat                 ['en', 'zh']                                                  ['chat', 'vision']      True
+LLM     qwen1.5-chat                 ['en', 'zh']                                                  ['chat', 'tools']       True
+LLM     qwen1.5-moe-chat             ['en', 'zh']                                                  ['chat', 'tools']       True
+LLM     qwen2-audio                  ['en', 'zh']                                                  ['chat', 'audio']       True
+LLM     qwen2-audio-instruct         ['en', 'zh']                                                  ['chat', 'audio']       True
+LLM     qwen2-instruct               ['en', 'zh']                                                  ['chat', 'tools']       True
+LLM     qwen2-moe-instruct           ['en', 'zh']                                                  ['chat', 'tools']       True
+LLM     qwen2-vl-instruct            ['en', 'zh']                                                  ['chat', 'vision']      True
+LLM     qwen2.5                      ['en', 'zh']                                                  ['generate']            True
+LLM     qwen2.5-coder                ['en', 'zh']                                                  ['generate']            True
+LLM     qwen2.5-coder-instruct       ['en', 'zh']                                                  ['chat', 'tools']       True
+LLM     qwen2.5-instruct             ['en', 'zh']                                                  ['chat', 'tools']       True
+LLM     QwQ-32B-Preview              ['en', 'zh']                                                  ['chat']                True
+LLM     seallm_v2                    ['en', 'zh', 'vi', 'id', 'th', 'ms', 'km', 'lo', 'my', 'tl']  ['generate']            True
+LLM     seallm_v2.5                  ['en', 'zh', 'vi', 'id', 'th', 'ms', 'km', 'lo', 'my', 'tl']  ['generate']            True
+LLM     Skywork                      ['en', 'zh']                                                  ['generate']            True
+LLM     Skywork-Math                 ['en', 'zh']                                                  ['generate']            True
+LLM     Starling-LM                  ['en', 'zh']                                                  ['chat']                True
+LLM     telechat                     ['en', 'zh']                                                  ['chat']                True
+LLM     tiny-llama                   ['en']                                                        ['generate']            True
+LLM     wizardcoder-python-v1.0      ['en']                                                        ['chat']                True
+LLM     wizardmath-v1.0              ['en']                                                        ['chat']                True
+LLM     xverse                       ['en', 'zh']                                                  ['generate']            True
+LLM     xverse-chat                  ['en', 'zh']                                                  ['chat']                True
+LLM     Yi                           ['en', 'zh']                                                  ['generate']            True
+LLM     Yi-1.5                       ['en', 'zh']                                                  ['generate']            True
+LLM     Yi-1.5-chat                  ['en', 'zh']                                                  ['chat']                True
+LLM     Yi-1.5-chat-16k              ['en', 'zh']                                                  ['chat']                True
+LLM     Yi-200k                      ['en', 'zh']                                                  ['generate']            True
+LLM     Yi-chat                      ['en', 'zh']                                                  ['chat']                True
+LLM     yi-coder                     ['en']                                                        ['generate']            True
+LLM     yi-coder-chat                ['en']                                                        ['chat']                True
+LLM     yi-vl-chat                   ['en', 'zh']                                                  ['chat', 'vision']      True
+
+
+在实际应用中，大模型推理引擎的重要性体现在以下几个方面：
+
+性能优化：大模型推理引擎通过各种优化技术（如量化、剪枝、低精度计算等），显著降低了模型的推理时间，提高了系统的吞吐量。
+资源利用：在多GPU或多节点环境下，推理引擎能够有效地分配计算资源，确保各个节点之间的负载均衡，从而最大化硬件资源的利用率。
+灵活部署：推理引擎通常支持多种部署方式，如云端部署、边缘计算等，能够适应不同的应用场景和需求。
+成本控制：通过优化推理过程，推理引擎能够在保证模型性能的前提下，降低硬件成本和能耗，为企业节省大量的运营成本。
+
+
+SG-Lang（使用要安装flashattention）采用了先进的模型压缩与优化技术，以减少模型的大小和计算复杂度，同时保持较高的推理精度。具体技术包括：
+
+量化技术：通过将模型参数从浮点数转换为低精度的整数，如8位量化和4位量化，显著减少了模型的大小和计算复杂度。
+剪枝技术：通过去除模型中不重要的权重，进一步减少模型的大小，提高推理速度。4
+
+直接启动自定义model
+xinference launch --model_path /root/autodl-tmp/output/qwen1half-14b-chat/v13-20241207-155017/checkpoint-738-merged  -n qwen1.5-chat -e http://region-31.seetacloud.com:51734 --model-engine transformers
+
+合并模型做推理
+CUDA_VISIBLE_DEVICES=0 swift infer   --model_type   qwen1half-14b-chat --model_id_or_path /root/autodl-tmp/output/qwen1half-14b-chat/v13-20241207-155017/checkpoint-738-merged     --infer_backend pt
+
+直接启动自定义model
+xinference launch --model_path /root/autodl-tmp/output/qwen1half-14b-chat/v13-20241207-155017/checkpoint-738-merged  -n qwen1.5-chat -e http://region-31.seetacloud.com:51734 --model-engine transformers
+
+

@@ -3,7 +3,7 @@
 """
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session, select
+from sqlmodel import Session, select, func
 from typing import List
 from datetime import datetime
 import os
@@ -50,7 +50,7 @@ async def create_knowledge_base(
     if existing:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail={"code": 40001, "message": "知识库名称已存在"},
+            detail={"code": 40001, "message": "创建失败换个知识库名称试试？"},
         )
 
     # 创建知识库
@@ -100,6 +100,20 @@ async def get_knowledge_base(
         ).all()
     )
 
+    # 计算 chunk 总数
+    from app.models import DocumentChunk
+    # 查找属于该知识库的所有文件
+    files = session.exec(
+        select(FileDocument).where(FileDocument.kb_id == kb_id)
+    ).all()
+    file_ids = [f.id for f in files]
+    
+    chunk_count = 0
+    if file_ids:
+        chunk_count = session.exec(
+            select(func.count(DocumentChunk.id)).where(DocumentChunk.file_id.in_(file_ids))
+        ).one()
+
     return ApiResponse(
         data=KnowledgeBaseDetailResponse(
             id=kb.id,
@@ -107,7 +121,7 @@ async def get_knowledge_base(
             description=kb.description,
             embedding_model=kb.embedding_model,
             vlm_model=kb.vlm_model,
-            chunk_count=kb.chunk_count,
+            chunk_count=chunk_count,
             updated_at=kb.updated_at,
             files_count=files_count,
         )

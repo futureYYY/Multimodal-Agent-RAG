@@ -3,15 +3,15 @@
 """
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, status, BackgroundTasks
-from sqlmodel import Session, select
-from typing import List
+from sqlmodel import Session, select, func
+from typing import List, Dict
 import os
 import aiofiles
 from datetime import datetime
 
 from app.core.database import get_session
 from app.core.config import get_settings
-from app.models import KnowledgeBase, FileDocument, FileStatus, generate_uuid
+from app.models import KnowledgeBase, FileDocument, FileStatus, generate_uuid, DocumentChunk
 from app.schemas import FileUploadResponse, FileStatusResponse, ApiResponse
 from app.tasks.parse_tasks import process_file_parsing
 
@@ -116,6 +116,17 @@ async def list_files(
 
     files = session.exec(statement).all()
 
+    # 批量查询 chunk 数量
+    chunk_counts_map = {}
+    if files:
+        file_ids = [f.id for f in files]
+        chunk_counts = session.exec(
+            select(DocumentChunk.file_id, func.count(DocumentChunk.id))
+            .where(DocumentChunk.file_id.in_(file_ids))
+            .group_by(DocumentChunk.file_id)
+        ).all()
+        chunk_counts_map = {file_id: count for file_id, count in chunk_counts}
+
     file_list = [
         FileStatusResponse(
             id=f.id,
@@ -124,6 +135,7 @@ async def list_files(
             status=f.status.value,
             progress=f.progress,
             error_message=f.error_message,
+            chunk_count=chunk_counts_map.get(f.id, 0),
             created_at=f.created_at,
         )
         for f in files
@@ -145,6 +157,11 @@ async def get_file_detail(
             detail={"code": 40401, "message": "文件不存在"},
         )
         
+    # 查询 chunk 数量
+    chunk_count = session.exec(
+        select(func.count(DocumentChunk.id)).where(DocumentChunk.file_id == file_id)
+    ).one()
+
     return ApiResponse(
         data=FileStatusResponse(
             id=file_doc.id,
@@ -153,6 +170,7 @@ async def get_file_detail(
             status=file_doc.status.value,
             progress=file_doc.progress,
             error_message=file_doc.error_message,
+            chunk_count=chunk_count,
             created_at=file_doc.created_at,
         )
     )

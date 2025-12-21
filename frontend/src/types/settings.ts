@@ -35,10 +35,11 @@ export interface UpdateSettingsRequest {
 export interface CustomModel {
   id: string;
   name: string;
-  model_type: 'llm' | 'embedding' | 'vlm';
+  model_type: 'llm' | 'embedding' | 'vlm' | 'rerank';
   base_url: string;
   api_key: string;
   model_name: string;
+  context_length?: number;
   is_active: boolean;
   created_at: string;
 }
@@ -46,17 +47,19 @@ export interface CustomModel {
 /** 创建自定义模型请求 */
 export interface CustomModelCreate {
   name: string;
-  model_type: 'llm' | 'embedding' | 'vlm';
+  model_type: 'llm' | 'embedding' | 'vlm' | 'rerank';
   base_url: string;
   api_key: string;
   model_name: string;
+  context_length?: number;
 }
 
 /** 更新自定义模型请求 */
 export interface CustomModelUpdate {
   name?: string;
-  model_type?: 'llm' | 'embedding' | 'vlm';
+  model_type?: 'llm' | 'embedding' | 'vlm' | 'rerank';
   base_url?: string;
   api_key?: string;
   model_name?: string;
+  context_length?: number;
 }

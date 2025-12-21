@@ -38,7 +38,15 @@ const Settings: React.FC = () => {
       ]);
       setSettings(settingsRes.data);
       setModels(modelsRes.data);
-      setCustomModels(customModelsRes.data);
+      
+      // Sort models: llm > vlm > embedding > rerank
+      const sortOrder: Record<string, number> = { llm: 1, vlm: 2, embedding: 3, rerank: 4 };
+      const sortedModels = (customModelsRes.data || []).sort((a: CustomModel, b: CustomModel) => {
+        const orderA = sortOrder[a.model_type] || 99;
+        const orderB = sortOrder[b.model_type] || 99;
+        return orderA - orderB;
+      });
+      setCustomModels(sortedModels);
       
       form.setFieldsValue({
         defaultEmbeddingModel: settingsRes.data.defaultEmbeddingModel,
@@ -87,14 +95,21 @@ const Settings: React.FC = () => {
       if (editingModelId) {
         await updateCustomModel(editingModelId, values);
         message.success('更新模型成功');
+        setIsModalVisible(false);
+        modelForm.resetFields();
+        setEditingModelId(null);
+        loadData(); // 重新加载列表
       } else {
-        await createCustomModel(values);
+        const res = await createCustomModel(values);
         message.success('添加模型成功');
+        setIsModalVisible(false);
+        modelForm.resetFields();
+        setEditingModelId(null);
+        await loadData(); // 重新加载列表
+        if (res && res.data) {
+             handleTestModel(res.data);
+        }
       }
-      setIsModalVisible(false);
-      modelForm.resetFields();
-      setEditingModelId(null);
-      loadData(); // 重新加载列表
     } catch (error) {
       message.error(editingModelId ? '更新模型失败' : '添加模型失败');
     } finally {
@@ -118,19 +133,28 @@ const Settings: React.FC = () => {
       base_url: model.base_url,
       api_key: model.api_key,
       model_name: model.model_name,
+      context_length: model.context_length,
     });
     setIsModalVisible(true);
   };
 
   // 删除自定义模型
-  const handleDeleteModel = async (id: string) => {
-    try {
-      await deleteCustomModel(id);
-      message.success('删除成功');
-      loadData(); // 重新加载
-    } catch (error) {
-      message.error('删除失败');
-    }
+  const handleDeleteModel = (id: string) => {
+    Modal.confirm({
+        title: '确认删除',
+        content: '确定要删除这个模型吗？此操作无法撤销。',
+        okText: '确认',
+        cancelText: '取消',
+        onOk: async () => {
+            try {
+                await deleteCustomModel(id);
+                message.success('删除成功');
+                loadData(); // 重新加载
+            } catch (error) {
+                message.error('删除失败');
+            }
+        },
+    });
   };
 
   // 测试自定义模型
@@ -167,7 +191,14 @@ const Settings: React.FC = () => {
       dataIndex: 'model_type',
       key: 'model_type',
       width: 100,
-      render: (type: string) => <Tag color={type === 'llm' ? 'blue' : type === 'embedding' ? 'green' : 'orange'}>{type}</Tag>,
+      render: (type: string) => {
+        let color = 'default';
+        if (type === 'llm') color = 'blue';
+        else if (type === 'embedding') color = 'green';
+        else if (type === 'vlm') color = 'orange';
+        else if (type === 'rerank') color = 'purple';
+        return <Tag color={color}>{type}</Tag>;
+      },
     },
     {
       title: '实际模型名',
@@ -293,33 +324,60 @@ const Settings: React.FC = () => {
               <Select.Option value="llm">大语言模型 (LLM)</Select.Option>
               <Select.Option value="embedding">向量模型 (Embedding)</Select.Option>
               <Select.Option value="vlm">视觉模型 (VLM)</Select.Option>
+              <Select.Option value="rerank">重排序模型 (Rerank)</Select.Option>
             </Select>
           </Form.Item>
 
           <Form.Item
-            name="base_url"
-            label="API Base URL"
-            rules={[{ required: true, message: '请输入 Base URL' }]}
-            tooltip="例如: https://api.deepseek.com/v1"
+            noStyle
+            shouldUpdate={(prevValues, currentValues) => prevValues.model_type !== currentValues.model_type}
           >
-            <Input placeholder="https://api.openai.com/v1" />
-          </Form.Item>
+            {({ getFieldValue }) => {
+              const modelType = getFieldValue('model_type');
+              const isRerank = modelType === 'rerank';
 
-          <Form.Item
-            name="api_key"
-            label="API Key"
-            rules={[{ required: true, message: '请输入 API Key' }]}
-          >
-            <Input.Password placeholder="sk-..." />
-          </Form.Item>
+              return (
+                <>
+                  <Form.Item
+                    name="base_url"
+                    label={isRerank ? "模型存放地址 (本地路径)" : "API Base URL"}
+                    rules={[{ required: true, message: isRerank ? '请输入模型本地路径' : '请输入 Base URL' }]}
+                    tooltip={isRerank ? "例如: E:\\Models\\bge-reranker-v2-m3" : "例如: https://api.deepseek.com/v1"}
+                  >
+                    <Input placeholder={isRerank ? "E:\\Models\\bge-reranker-v2-m3" : "https://api.openai.com/v1"} />
+                  </Form.Item>
 
-          <Form.Item
-            name="model_name"
-            label="实际模型名称"
-            rules={[{ required: true, message: '请输入模型名称' }]}
-            tooltip="API 调用时使用的 model 参数值，例如: deepseek-chat"
-          >
-            <Input placeholder="gpt-3.5-turbo" />
+                  <Form.Item
+                    name="api_key"
+                    label="API Key"
+                    rules={[{ required: !isRerank, message: '请输入 API Key' }]}
+                    tooltip={isRerank ? "本地模型可留空" : undefined}
+                  >
+                    <Input.Password placeholder={isRerank ? "本地模型可不填" : "sk-..."} />
+                  </Form.Item>
+
+                  <Form.Item
+                    name="model_name"
+                    label="实际模型名称"
+                    rules={[{ required: !isRerank, message: '请输入模型名称' }]}
+                    tooltip={isRerank ? "本地模型通常不使用此字段，可随意填写" : "API 调用时使用的 model 参数值，例如: deepseek-chat"}
+                  >
+                    <Input placeholder={isRerank ? "default" : "gpt-3.5-turbo"} />
+                  </Form.Item>
+
+                  {isRerank && (
+                    <Form.Item
+                      name="context_length"
+                      label="上下文长度"
+                      initialValue={4096}
+                      rules={[{ required: true, message: '请输入上下文长度' }]}
+                    >
+                      <InputNumber style={{ width: '100%' }} min={1} max={32768} />
+                    </Form.Item>
+                  )}
+                </>
+              );
+            }}
           </Form.Item>
 
           <Form.Item>

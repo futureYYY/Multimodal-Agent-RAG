@@ -11,6 +11,7 @@ from app.models import KnowledgeBase
 from app.schemas import RecallRequest, RecallResult, ApiResponse, RecallTestResponse
 from app.services.vector_store import VectorStoreService
 from app.services.embedding import EmbeddingService
+from app.services.rerank import RerankService
 import time
 import re
 
@@ -51,6 +52,44 @@ async def recall_test(
             score_threshold=data.score_threshold,
         )
 
+        # 执行重排序 (Rerank)
+        if data.rerank_enabled and results:
+            try:
+                rerank_service = RerankService(session)
+                # 仅提取文本内容作为候选
+                candidates = [r["content"] for r in results]
+                
+                from app.models import CustomModel
+                rerank_model = None
+                if data.rerank_model_id:
+                    rerank_model = session.get(CustomModel, data.rerank_model_id)
+                
+                rerank_results = rerank_service.rerank(data.query, candidates, model=rerank_model)
+                
+                if rerank_results:
+                    # 根据 rerank 结果重新构建结果列表
+                    new_results = []
+                    for rr in rerank_results:
+                        idx = rr.get("index")
+                        score = rr.get("score", 0.0)
+                        
+                        # 校验索引有效性
+                        if idx is not None and isinstance(idx, int) and 0 <= idx < len(results):
+                            # 过滤分数
+                            if score >= data.rerank_score_threshold:
+                                item = results[idx]
+                                item["rerank_score"] = score
+                                new_results.append(item)
+                    
+                    # 确保结果按 rerank_score 排序
+                    new_results.sort(key=lambda x: x.get("rerank_score", 0), reverse=True)
+                    results = new_results
+                    
+            except Exception as e:
+                print(f"Rerank execution failed: {e}")
+                # 出错时保留原结果，或者可以选择抛出异常
+                # 这里选择保留原结果但打印日志
+
         # 格式化返回结果
         result_list = []
         for r in results:
@@ -73,6 +112,7 @@ async def recall_test(
             result_list.append(RecallResult(
                 chunkId=r.get("id"),
                 score=r["score"],
+                rerank_score=r.get("rerank_score"),
                 content=r["content"],
                 fileName=r["metadata"].get("file_name", "未知"),
                 kbName=kb.name,

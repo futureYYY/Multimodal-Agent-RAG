@@ -37,7 +37,7 @@ class KnowledgeBase(SQLModel, table=True):
     __tablename__ = "knowledge_bases"
 
     id: str = Field(default_factory=generate_uuid, primary_key=True)
-    name: str = Field(index=True, unique=True)
+    name: str = Field(index=True) # 允许重名
     description: Optional[str] = None
     embedding_model: str
     vlm_model: str
@@ -92,6 +92,7 @@ class ModelType(str, Enum):
     LLM = "llm"
     EMBEDDING = "embedding"
     VLM = "vlm"
+    RERANK = "rerank"
 
 
 class CustomModel(SQLModel, table=True):
@@ -99,12 +100,12 @@ class CustomModel(SQLModel, table=True):
     __tablename__ = "custom_models"
 
     id: str = Field(default_factory=generate_uuid, primary_key=True)
-    name: str = Field(index=True, unique=True, description="显示名称")
+    name: str = Field(index=True, description="显示名称")
     model_type: ModelType = Field(index=True)
-    base_url: str
-    api_key: str
+    base_url: str = Field(description="API地址或本地模型路径")
+    api_key: str = Field(default="", description="API Key (本地模型可为空)")
     model_name: str = Field(description="实际调用的模型名称")
+    context_length: int = Field(default=4096, description="上下文长度")
     is_active: bool = Field(default=True)
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
-

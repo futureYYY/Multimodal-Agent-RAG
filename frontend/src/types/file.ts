@@ -22,7 +22,9 @@ export interface FileInfo {
   progress: number;
   progressMessage?: string;
   chunkCount?: number;
+  chunk_count?: number;
   createdAt: string;
+  created_at?: string;
   updatedAt: string;
   errorMessage?: string;
 }

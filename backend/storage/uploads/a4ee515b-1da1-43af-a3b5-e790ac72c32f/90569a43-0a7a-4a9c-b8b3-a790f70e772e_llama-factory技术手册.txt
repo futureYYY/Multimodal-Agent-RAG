@@ -1,0 +1,123 @@
+llama-factory项目地址：https://github.com/hiyouga/LLaMA-Factory/blob/main/README_zh.md
+魔搭社区（模型下载）：https://modelscope.cn/models/Qwen/Qwen3-8B
+
+安装虚拟环境：conda create -n llama python=3.10
+
+
+llama-factory源码部署:
+	git clone --depth 1 https://github.com/hiyouga/LLaMA-Factory.git
+	cd LLaMA-Factory
+	pip install -e ".[torch,metrics]" --no-build-isolation
+	pip install tensorboard 
+
+
+LLaMA Board 可视化微调（由 Gradio 驱动）
+	llamafactory-cli webui （默认是7860端口）
+	GRADIO_SERVER_PORT=7861 llamafactory-cli webui（指定7861端口）  
+
+安装modelscope下载模型
+	pip install modelscope
+
+一键下载模型
+	modelscope download --model Qwen/Qwen3-8B  --local_dir <这里指定模型下载路径>
+	modelscope download --model Qwen/Qwen3-8B  --local_dir /root/autodl-tmp/Qwen3-8B
+	modelscope download --model Qwen/Qwen3-8B-Base  --local_dir /root/autodl-tmp/Qwen3-8B-Base
+	modelscope download --model Qwen/Qwen3-4B-Base  --local_dir /root/autodl-tmp/Qwen3-4B-Base
+	modelscope download --model Qwen/Qwen3-1.7B-Base --local_dir /root/autodl-tmp/Qwen3-1.7B-Base
+	modelscope download --model Qwen/Qwen3-Embedding-8B --local_dir /root/autodl-tmp/Qwen3-Embedding-8B
+	modelscope download --model Qwen/Qwen3-Embedding-0.6B --local_dir D:\company\long_text_classification\embeding_long_text_classification\Qwen3-Embedding-0.6B
+
+数据集转成的格式
+	{"instruction": "你是一名专业的分类器，任务是根据电信服务员和客户的长文本对话，将其分类到合适的大类和小类中。", "input": "话务员:请讲。嗯。客户:喂，你好，你帮我看一下这边~", "output": {"大类": "网络问题", "小类": "信号覆盖"}}
+	{"instruction": "将对话分类到合适的大类和小类", "input": "话务员:请讲。嗯。客户:喂，你好，你帮我看一下这边~", "output": "网络问题>信号覆盖"}
+
+
+
+微调前参数提示：
+	-max_seq_length在微调中是输入序列的截断长度 （instruct+长文本的总tokens）
+
+
+
+API推理命令：
+	API_PORT=8000 CUDA_VISIBLE_DEVICES=0 llamafactory-cli api examples/inference/llama3_lora_sft.yaml
+
+==============================================================================================================
+
+conda create -n llama2 python=3.8 -y
+conda activate llama2
+
+# 安装PyTorch 1.8.1 (CUDA 11.1版本 - 与glibc 2.17兼容)
+pip install torch==1.8.1+cu111 torchvision==0.9.1+cu111 torchaudio==0.8.1 -f https://download.pytorch.org/whl/torch_stable.html
+
+# 安装其他依赖 (使用兼容的较旧版本)
+pip install transformers==4.18.0
+pip install peft==0.2.0
+pip install fastapi==0.88.0
+pip install uvicorn==0.18.3
+pip install requests==2.27.1
+pip install tqdm==4.64.1
+pip install openai==0.27.0
+pip install pydantic==1.10.8
+
+
+# vllm通常要求较新的PyTorch，但可以尝试较早的兼容版本
+pip install vllm==0.1.4
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

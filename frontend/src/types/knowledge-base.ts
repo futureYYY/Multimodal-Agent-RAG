@@ -10,14 +10,14 @@ export interface KnowledgeBase {
   id: string;
   name: string;
   description?: string;
-  embeddingModel: string;
-  vlmModel: string;
-  chunkCount: number;
-  fileCount: number;
-  createdAt: string;
-  updatedAt: string;
-  status: KnowledgeBaseStatus;
-  isDeleted?: boolean;
+  embedding_model: string;
+  vlm_model: string;
+  chunk_count: number;
+  files_count?: number;
+  created_at?: string;
+  updated_at: string;
+  status?: KnowledgeBaseStatus;
+  is_deleted?: boolean;
 }
 
 /** 创建知识库请求 */

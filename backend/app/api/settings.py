@@ -138,10 +138,10 @@ async def update_custom_model(
         raise HTTPException(status_code=404, detail="模型不存在")
 
     if model_in.name is not None and model_in.name != db_model.name:
-        # 检查名称重复
-        existing = session.exec(select(CustomModel).where(CustomModel.name == model_in.name)).first()
-        if existing:
-            raise HTTPException(status_code=400, detail="模型名称已存在")
+        # 检查名称重复 - 已移除限制
+        # existing = session.exec(select(CustomModel).where(CustomModel.name == model_in.name)).first()
+        # if existing:
+        #     raise HTTPException(status_code=400, detail="模型名称已存在")
         db_model.name = model_in.name
 
     if model_in.base_url is not None:
@@ -151,6 +151,9 @@ async def update_custom_model(
     if model_in.model_name is not None:
         db_model.model_name = model_in.model_name
     
+    if model_in.context_length is not None:
+        db_model.context_length = model_in.context_length
+
     if model_in.model_type is not None:
         try:
             db_model.model_type = ModelType(model_in.model_type)
@@ -230,6 +233,12 @@ async def test_custom_model_connection(
                 model_id=db_model.model_name
             ):
                 break
+        
+        elif db_model.model_type == ModelType.RERANK:
+            from app.services.rerank import test_rerank_connection
+            result = test_rerank_connection(db_model)
+            if not result["success"]:
+                raise Exception(result["message"])
 
         return ApiResponse(message="连接测试成功")
 

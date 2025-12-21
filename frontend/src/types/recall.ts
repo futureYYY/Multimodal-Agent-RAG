@@ -7,6 +7,9 @@ export interface RecallTestParams {
   query: string;
   topK: number;
   scoreThreshold: number;
+  rerank_enabled?: boolean;
+  rerank_score_threshold?: number;
+  rerank_model_id?: string;
 }
 
 /** 召回结果项 */
@@ -15,6 +18,7 @@ export interface RecallResult {
   fileName: string;
   location: string;
   score: number;
+  rerank_score?: number;
   content: string;
   imageUrl?: string;
 }

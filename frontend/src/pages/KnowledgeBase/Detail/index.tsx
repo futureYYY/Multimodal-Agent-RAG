@@ -43,6 +43,7 @@ import {
   vectorizeFile,
   parseFile,
   getFileDetail,
+  getModelList,
 } from '@/services';
 import { useAppStore } from '@/stores';
 import { formatFileSize, formatDateTime, FILE_STATUS_CONFIG, FILE_POLL_INTERVAL } from '@/utils';
@@ -54,7 +55,7 @@ const { Dragger } = Upload;
 const KnowledgeBaseDetail: React.FC = () => {
   const { kbId } = useParams<{ kbId: string }>();
   const navigate = useNavigate();
-  const { setCurrentKb } = useAppStore();
+  const { setCurrentKb, models, setModels } = useAppStore();
 
   const [loading, setLoading] = useState(true);
   const [knowledgeBase, setKnowledgeBase] = useState<KnowledgeBase | null>(null);
@@ -95,13 +96,29 @@ const KnowledgeBaseDetail: React.FC = () => {
     }
   }, [kbId]);
 
+  // 加载模型列表
+  const loadModels = async () => {
+    // 强制加载一次，确保 models 不为空，或者直接刷新
+    try {
+      const response = await getModelList();
+      const data = Array.isArray(response) ? response : (response as any).data || [];
+      setModels(data);
+    } catch (error) {
+      console.error('加载模型列表失败:', error);
+    }
+  };
+
   // 初始加载
   useEffect(() => {
     const init = async () => {
       setLoading(true);
-      await loadKnowledgeBase();
-      await loadFiles();
-      setLoading(false);
+      try {
+        await Promise.all([loadKnowledgeBase(), loadFiles(), loadModels()]);
+      } catch (e) {
+        console.error('Initialization failed:', e);
+      } finally {
+        setLoading(false);
+      }
     };
     init();
 
@@ -253,7 +270,26 @@ const KnowledgeBaseDetail: React.FC = () => {
           message.success('已触发自动处理任务，解析完成后将自动入库');
       } else {
           // 批量逻辑：触发所有文件的自动处理任务 (auto_vectorize=true)
-          const tasks = files.map(file => 
+          // 过滤掉不需要处理的文件
+          // 规则：
+          // 1. 解析完成 (parsed) -> 忽略
+          // 2. 待确认 (pending_confirm) -> 忽略 (用户自己处理)
+          // 3. 正在处理中 (parsing/embedding) -> 忽略
+          // 4. 失败 (failed) -> 重试
+          // 5. 其他 (如 uploaded) -> 处理
+          const targetFiles = files.filter(f => 
+             f.status === 'failed' || 
+             (f.status !== 'parsed' && f.status !== 'pending_confirm' && f.status !== 'parsing' && f.status !== 'embedding')
+          );
+
+          if (targetFiles.length === 0) {
+             message.info('没有需要处理的文件');
+             setParseLoading(false);
+             setParseModalVisible(false);
+             return;
+          }
+
+          const tasks = targetFiles.map(file => 
              parseFile(file.id, { 
                  ...config,
                  auto_vectorize: true 
@@ -411,7 +447,7 @@ const KnowledgeBaseDetail: React.FC = () => {
           <Dragger
             customRequest={handleUpload}
             showUploadList={false}
-            accept=".docx,.pdf,.xlsx,.csv"
+            accept=".docx,.pdf,.xlsx,.csv,.txt"
             multiple
             disabled={uploading}
             className={styles.uploader}
@@ -421,7 +457,7 @@ const KnowledgeBaseDetail: React.FC = () => {
             </p>
             <p className="ant-upload-text">点击或拖拽文件到此处上传</p>
             <p className="ant-upload-hint">
-              支持 Word (.docx)、PDF、Excel (.xlsx)、CSV 格式
+              支持 Word (.docx)、PDF、Excel (.xlsx)、CSV、TXT 格式
             </p>
           </Dragger>
 
@@ -457,6 +493,9 @@ const KnowledgeBaseDetail: React.FC = () => {
     });
   };
 
+  // 获取 Embedding 模型名称
+  const embeddingModelName = models.find(m => m.id === knowledgeBase?.embedding_model)?.name || knowledgeBase?.embedding_model || '-';
+
   return (
     <div className={styles.container}>
       <PageHeader
@@ -488,27 +527,20 @@ const KnowledgeBaseDetail: React.FC = () => {
       {/* 统计信息 */}
       <Card className={styles.statsCard}>
         <Row gutter={24}>
-          <Col span={6}>
+          <Col span={8}>
             <Statistic title="文件数量" value={files?.length || 0} suffix="个" />
           </Col>
-          <Col span={6}>
+          <Col span={8}>
             <Statistic
               title="分块数量"
-              value={knowledgeBase?.chunkCount || 0}
+              value={knowledgeBase?.chunk_count || 0}
               suffix="个"
             />
           </Col>
-          <Col span={6}>
+          <Col span={8}>
             <Statistic
               title="Embedding 模型"
-              value={knowledgeBase?.embeddingModel || '-'}
-              valueStyle={{ fontSize: 16 }}
-            />
-          </Col>
-          <Col span={6}>
-            <Statistic
-              title="VLM 模型"
-              value={knowledgeBase?.vlmModel || '-'}
+              value={embeddingModelName}
               valueStyle={{ fontSize: 16 }}
             />
           </Col>

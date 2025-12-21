@@ -4,7 +4,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Button, Row, Col, Spin, message, Modal, Form, Input, Select, Table, Space, Popconfirm, Tooltip } from 'antd';
+import { Card, Button, Row, Col, Spin, message, Modal, Form, Input, Select, Table, Space, Popconfirm, Tooltip, Tag } from 'antd';
 import {
   PlusOutlined,
   DatabaseOutlined,
@@ -144,8 +144,13 @@ const KnowledgeBaseList: React.FC = () => {
       setCreateModalVisible(false);
       form.resetFields();
       loadKnowledgeBases();
-    } catch (error) {
-      message.error('创建失败');
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.message || '创建失败换个知识库名称试试？';
+      if (errorMsg.includes('exists') || errorMsg.includes('已存在')) {
+        message.error('创建失败换个知识库名称试试？');
+      } else {
+        message.error(errorMsg);
+      }
     } finally {
       setCreateLoading(false);
     }
@@ -153,9 +158,9 @@ const KnowledgeBaseList: React.FC = () => {
 
   // 渲染知识库卡片
   const renderKnowledgeBaseCard = (kb: KnowledgeBase) => {
-    // 兼容后端蛇形命名和前端驼峰命名
-    const chunkCount = (kb as any).chunk_count ?? kb.chunkCount ?? 0;
-    const updatedAt = (kb as any).updated_at ?? kb.updatedAt;
+    // 获取 Embedding 模型名称
+    const embeddingModelId = kb.embedding_model;
+    const embeddingModelName = models.find(m => m.id === embeddingModelId)?.name || embeddingModelId || '-';
 
     return (
       <Col xs={24} sm={12} lg={12} xl={8} key={kb.id}>
@@ -183,12 +188,15 @@ const KnowledgeBaseList: React.FC = () => {
             <div className={styles.cardMeta}>
               <span className={styles.metaItem}>
                 <FileTextOutlined />
-                {formatNumber(chunkCount)} 个分块
+                {formatNumber(kb.chunk_count || 0)} 个分块
               </span>
               <span className={styles.metaItem}>
                 <ClockCircleOutlined />
-                {updatedAt ? formatRelativeTime(updatedAt) : '-'}
+                {kb.updated_at ? formatRelativeTime(kb.updated_at) : '-'}
               </span>
+            </div>
+            <div className={styles.cardModelInfo} style={{ marginTop: 8, fontSize: 12, color: '#888' }}>
+                <Tag style={{ marginRight: 0 }}>{embeddingModelName}</Tag>
             </div>
           </div>
         </Card>
@@ -197,7 +205,7 @@ const KnowledgeBaseList: React.FC = () => {
   };
 
   // 获取 embedding 模型列表
-  const embeddingModels = models.filter((m) => m.type === 'embedding');
+  const embeddingModels = models.filter((m) => m.type?.toLowerCase() === 'embedding');
   const vlmModels = models.filter((m) => m.type === 'vlm');
 
   return (
@@ -291,16 +299,10 @@ const KnowledgeBaseList: React.FC = () => {
           <Form.Item
             name="vlm_model"
             label="VLM 模型"
-            rules={[{ required: true, message: '请选择 VLM 模型' }]}
-            tooltip="用于图片解析的视觉语言模型"
+            hidden
+            initialValue="default"
           >
-            <Select placeholder="请选择 VLM 模型">
-              {vlmModels.map((model) => (
-                <Select.Option key={model.id} value={model.id}>
-                  {model.name}
-                </Select.Option>
-              ))}
-            </Select>
+             <Input />
           </Form.Item>
 
           <Form.Item className={styles.formActions}>

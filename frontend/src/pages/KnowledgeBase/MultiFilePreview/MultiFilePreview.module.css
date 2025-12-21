@@ -68,16 +68,32 @@
 
 .fileItem {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
   width: 100%;
+  padding-right: 8px; /* 增加右侧间距，避免与 Check 图标重叠 */
+}
+
+.fileInfo {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  flex: 1; /* 占据剩余空间 */
+  margin-right: 8px; /* 与图标的间距 */
+  line-height: 1.2; /* 紧凑行高 */
 }
 
 .fileName {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: 200px;
+  font-size: 14px;
+}
+
+.fileMeta {
+  font-size: 12px;
+  color: #888;
+  margin-top: 2px;
 }
 
 .previewHeader {

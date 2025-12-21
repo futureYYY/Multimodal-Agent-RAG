@@ -1,0 +1,46 @@
+安装vllm
+pip install vllm
+
+--max-model-len
+模型上下文长度。如果未指定，将自动从模型配置中派生
+
+启动vllm  
+vllm serve /root/autodl-tmp/output/qwen2_5-14b-instruct/认知10%通用30%领域70%/checkpoint-1050-merged --served-model-name  qwen2.5 --gpu_memory_utilization 1.0 --model_name qwen2.5  --host 127.0.0.1 --port 6006 --api-key qweqwe123（加鉴权）最大推理长度通常由--max_gen_len参数控制 --max_model_len 4096（输入长度 默认值为1800）
+（api key 有问题用postman测试不行）
+headers = {
+    "Authorization": "Bearer YOUR_API_KEY",
+    "Content-Type": "application/json"
+}
+
+curl http://localhost:6006/chat/completions -H "Content-Type: application/json" -d '{
+  "model": "Qwen1.5-14B-Chat",
+  "messages": [
+    {"role": "system", "content": "You are Qwen, created by Alibaba Cloud. You are a helpful assistant."},
+    {"role": "user", "content": "Tell me something about large language models."}
+  ],
+  "temperature": 0.7,
+  "top_p": 0.8,
+  "repetition_penalty": 1.05,
+  "max_tokens": 512
+}'
+
+postman测试地址
+http://region-31.seetacloud.com:51734/v1/chat/completions
+测试内容
+{
+  "model": "/root/autodl-tmp/output/qwen1half-14b-chat/v13-20241207-155017/checkpoint-738-merged",
+  "messages": [
+    {"role": "system", "content": "You are Qwen, created by Alibaba Cloud. You are a helpful assistant."},
+    {"role": "user", "content": "Tell me something about large language models."}
+  ],
+  "temperature": 0.7,
+  "top_p": 0.8,
+  "repetition_penalty": 1.05,
+  "max_tokens": 512
+}
+
+对模型重命名
+vllm serve /root/autodl-tmp/output/qwen2_5-14b-instruct/认知10%通用30%领域70%/checkpoint-1050-merged --gpu_memory_utilization 1.0 --served-model-name  qwen2.5 --max_model_len 4096 --port 6006 --host 127.0.0.1
+
+
+

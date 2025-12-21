@@ -298,15 +298,25 @@ class FileParser:
         file_id = os.path.basename(file_path).split("_")[0]
         
         current_text_buffer = ""
+        # 用于 no_split 模式的页面级缓存
+        page_text_buffer = ""
+        page_image_chunks = []
         
         # 辅助函数：处理段落中的图片和文本
         def process_paragraph(para, page_num):
-            nonlocal current_text_buffer
+            nonlocal current_text_buffer, page_text_buffer, page_image_chunks
+            
+            # 临时文本，用于当前段落
+            para_text = ""
             
             for run in para.runs:
                 # 1. 提取文本
                 if run.text:
-                    current_text_buffer += run.text
+                    if self.chunk_mode == "no_split" or self.chunk_mode == "no_chunk":
+                        page_text_buffer += run.text
+                    else:
+                        current_text_buffer += run.text
+                    para_text += run.text
                 
                 # 2. 检查图片
                 # 查找 run 元素下的 drawing 标签
@@ -335,16 +345,11 @@ class FileParser:
                                     ext = content_type.split('/')[-1] if '/' in content_type else "png"
                                     if ext == "jpeg": ext = "jpg"
                                     
-                                    # 结算前面的文本
-                                    if current_text_buffer:
-                                        chunks.extend(self._process_text_content(current_text_buffer, page_num))
-                                        current_text_buffer = ""
-                                    
                                     # 保存图片
-                                    img_idx = len(chunks) 
+                                    img_idx = len(chunks) + len(page_image_chunks)
                                     saved_path = self._save_image(image_bytes, file_id, page_num, img_idx, ext)
                                     
-                                    chunks.append(ParsedChunk(
+                                    image_chunk = ParsedChunk(
                                         content=f"[图片: {saved_path}]",
                                         page_number=page_num,
                                         content_type="image",
@@ -353,31 +358,55 @@ class FileParser:
                                             "timestamp": datetime.now().isoformat(),
                                             "original_name": f"image_docx_{img_idx}"
                                         }
-                                    ))
+                                    )
+                                    
+                                    if self.chunk_mode == "no_split" or self.chunk_mode == "no_chunk":
+                                        # 在 no_split 模式下，图片单独收集，不打断文本流
+                                        page_image_chunks.append(image_chunk)
+                                    else:
+                                        # 普通模式：结算前面的文本
+                                        if current_text_buffer:
+                                            chunks.extend(self._process_text_content(current_text_buffer, page_num))
+                                            current_text_buffer = ""
+                                        chunks.append(image_chunk)
+                                        
                                 except Exception as e:
                                     print(f"Word 图片提取失败: {e}")
             
             # 段落结束换行
-            current_text_buffer += "\n"
+            if self.chunk_mode == "no_split" or self.chunk_mode == "no_chunk":
+                page_text_buffer += "\n"
+            else:
+                current_text_buffer += "\n"
 
         # 遍历文档元素
         page_num_estimate = 1
         para_count = 0
         
         for element in doc.element.body.iterchildren():
+            # 检查是否需要分页结算 (仅针对 no_split 模式)
+            if (self.chunk_mode == "no_split" or self.chunk_mode == "no_chunk") and para_count > 10:
+                # 结算上一页的文本和图片
+                if page_text_buffer:
+                    chunks.extend(self._process_text_content(page_text_buffer, page_num_estimate))
+                    page_text_buffer = ""
+                if page_image_chunks:
+                    chunks.extend(page_image_chunks)
+                    page_image_chunks = []
+                
+                para_count = 0
+                page_num_estimate += 1
+            
+            # 普通模式的分页估算
+            elif para_count > 10:
+                para_count = 0
+                page_num_estimate += 1
+
             if element.tag.endswith('p'): # Paragraph
                 process_paragraph(Paragraph(element, doc), page_num_estimate)
                 para_count += 1
-                if para_count > 10: # 粗略估算分页
-                    para_count = 0
-                    page_num_estimate += 1
                     
             elif element.tag.endswith('tbl'): # Table
-                # 结算文本
-                if current_text_buffer:
-                    chunks.extend(self._process_text_content(current_text_buffer, page_num_estimate))
-                    current_text_buffer = ""
-                
                 # 提取表格内容
                 table = Table(element, doc)
                 rows_data = []
@@ -388,15 +417,31 @@ class FileParser:
                 if rows_data:
                     df = pd.DataFrame(rows_data)
                     md_table = df.to_markdown(index=False, header=False)
-                    chunks.append(ParsedChunk(
-                        content=md_table,
-                        page_number=page_num_estimate,
-                        content_type="table",
-                    ))
+                    
+                    if self.chunk_mode == "no_split" or self.chunk_mode == "no_chunk":
+                        # no_split 模式：表格作为 Markdown 拼接到文本中
+                        page_text_buffer += f"\n{md_table}\n"
+                    else:
+                        # 普通模式：结算文本，表格单独成块
+                        if current_text_buffer:
+                            chunks.extend(self._process_text_content(current_text_buffer, page_num_estimate))
+                            current_text_buffer = ""
+                        
+                        chunks.append(ParsedChunk(
+                            content=md_table,
+                            page_number=page_num_estimate,
+                            content_type="table",
+                        ))
 
         # 处理剩余文本
-        if current_text_buffer:
-            chunks.extend(self._process_text_content(current_text_buffer, page_num_estimate))
+        if self.chunk_mode == "no_split" or self.chunk_mode == "no_chunk":
+            if page_text_buffer:
+                chunks.extend(self._process_text_content(page_text_buffer, page_num_estimate))
+            if page_image_chunks:
+                chunks.extend(page_image_chunks)
+        else:
+            if current_text_buffer:
+                chunks.extend(self._process_text_content(current_text_buffer, page_num_estimate))
             
         return chunks
 
