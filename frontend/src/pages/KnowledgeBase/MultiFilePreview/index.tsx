@@ -11,9 +11,13 @@ import {
   SaveOutlined,
   FileImageOutlined,
   TableOutlined,
-  RollbackOutlined
+  RollbackOutlined,
+  FolderOutlined
 } from '@ant-design/icons';
 import type { FileInfo, ChunkInfo } from '@/types';
+
+const IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'bmp', 'webp'];
+const IMAGE_FOLDER_ID = 'standalone_images';
 import { getFileList, parseFile, submitChunks, getFileDetail, getFileChunks, updateChunk, vectorizeFile } from '@/services';
 import ChunkCard from '@/components/ChunkCard';
 import ParseModal, { ParseConfig } from '../Detail/ParseModal';
@@ -28,6 +32,7 @@ const MultiFilePreview: React.FC = () => {
   const initialConfig = (location.state as { config?: ParseConfig })?.config;
 
   const [files, setFiles] = useState<FileInfo[]>([]);
+  const [imageFiles, setImageFiles] = useState<FileInfo[]>([]);
   const [selectedFileId, setSelectedFileId] = useState<string>('');
   const [chunks, setChunks] = useState<ChunkInfo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -76,15 +81,37 @@ const MultiFilePreview: React.FC = () => {
           validFiles = validFiles.filter(f => f.status !== 'parsed');
       }
       
-      setFiles(validFiles);
-      if (validFiles.length > 0 && !selectedFileId) {
-        setSelectedFileId(validFiles[0].id);
-        // 手动触发一次 preview，因为 useEffect 依赖 selectedFileId，但此时 selectedFileId 刚设置可能还没生效
-        // 或者依赖 useEffect 自动触发。
-        // 但如果 validFiles 变了，selectedFileId 没变（比如之前选了 id=1，现在列表只有 id=1），useEffect 可能不触发？
-        // 不，useEffect 依赖 selectedFileId。如果之前是空，现在设置了，会触发。
-        // 问题可能在于 validFiles[0].id 赋值给 selectedFileId 后，useEffect [selectedFileId] 会执行。
-        // 但如果 isViewMode，previewFile 内部会检查状态。
+      // 分离图片文件
+      const imgs = validFiles.filter(f => {
+          const ext = f.name.split('.').pop()?.toLowerCase();
+          return ext && IMAGE_EXTENSIONS.includes(ext);
+      });
+      setImageFiles(imgs);
+
+      const others = validFiles.filter(f => {
+          const ext = f.name.split('.').pop()?.toLowerCase();
+          return !ext || !IMAGE_EXTENSIONS.includes(ext);
+      });
+
+      let finalFiles = [...others];
+      if (imgs.length > 0) {
+           const imageFolder = {
+              id: IMAGE_FOLDER_ID,
+              name: '图片库',
+              status: 'parsed', 
+              chunk_count: imgs.reduce((acc, f) => acc + (f.chunk_count || 0), 0),
+              size: imgs.reduce((acc, f) => acc + f.size, 0),
+              createdAt: imgs[0]?.createdAt || new Date().toISOString(),
+              updatedAt: imgs[0]?.updatedAt || new Date().toISOString(),
+              kb_id: kbId!,
+              type: 'folder' // 标记为文件夹
+           } as unknown as FileInfo;
+           finalFiles.unshift(imageFolder);
+      }
+      
+      setFiles(finalFiles);
+      if (finalFiles.length > 0 && !selectedFileId) {
+        setSelectedFileId(finalFiles[0].id);
       }
     } catch (error) {
       message.error('加载文件列表失败');
@@ -102,6 +129,50 @@ const MultiFilePreview: React.FC = () => {
   const previewFile = async (fileId: string) => {
     setLoading(true);
     setChunks([]); // 先清空，避免显示旧内容
+
+    // 处理图片文件夹
+    if (fileId === IMAGE_FOLDER_ID) {
+        try {
+            const processImage = async (file: FileInfo) => {
+                 if (file.status === 'parsed' || file.status === 'pending_confirm') {
+                     const res = await getFileChunks(file.id);
+                     return Array.isArray(res.data) ? res.data : [];
+                 }
+                 
+                 if (isViewMode) return [];
+                 
+                 try {
+                    await parseFile(file.id, {
+                        ...parseConfig,
+                        preview: true
+                    });
+                    
+                    const startTime = Date.now();
+                    while (Date.now() - startTime < 30000) { // 30秒超时
+                        const detail = await getFileDetail(file.id);
+                        if (detail.data.status === 'pending_confirm' || detail.data.status === 'parsed') {
+                            const res = await getFileChunks(file.id);
+                            return Array.isArray(res.data) ? res.data : [];
+                        }
+                        if (detail.data.status === 'failed') break;
+                        await new Promise(r => setTimeout(r, 500));
+                    }
+                 } catch (e) {
+                     console.error(`Failed to parse image ${file.name}`, e);
+                 }
+                 return [];
+            };
+            
+            const results = await Promise.all(imageFiles.map(processImage));
+            setChunks(results.flat());
+        } catch (error) {
+            message.error('加载图片预览失败');
+        } finally {
+            setLoading(false);
+        }
+        return;
+    }
+
     try {
       // 如果是 view 模式且文件已经是 pending_confirm 或 parsed，直接获取 chunks，不需要重新 parse
       const currentFile = files.find(f => f.id === fileId);
@@ -361,8 +432,17 @@ const MultiFilePreview: React.FC = () => {
       // 2. 触发“全部入库”逻辑
       setSubmitting(true);
       try {
+          // 处理图片文件夹
+          const realFiles = [...files];
+          // 如果列表包含图片文件夹，需要把它展开为实际的图片文件列表
+          const imageFolderIndex = realFiles.findIndex(f => f.id === IMAGE_FOLDER_ID);
+          if (imageFolderIndex !== -1) {
+              // 移除文件夹，加入实际图片文件
+              realFiles.splice(imageFolderIndex, 1, ...imageFiles);
+          }
+
           // 并行触发所有文件的解析任务 (auto_vectorize=true)
-          const tasks = files.map(file => 
+          const tasks = realFiles.map(file => 
              parseFile(file.id, { 
                  ...newConfig,
                  auto_vectorize: true // 自动入库
@@ -396,8 +476,17 @@ const MultiFilePreview: React.FC = () => {
       onOk: async () => {
         setSubmitting(true);
         try {
+          // 处理图片文件夹
+          const realFiles = [...files];
+          // 如果列表包含图片文件夹，需要把它展开为实际的图片文件列表
+          const imageFolderIndex = realFiles.findIndex(f => f.id === IMAGE_FOLDER_ID);
+          if (imageFolderIndex !== -1) {
+              // 移除文件夹，加入实际图片文件
+              realFiles.splice(imageFolderIndex, 1, ...imageFiles);
+          }
+
           // 并行处理所有文件 (恢复并发，后端已支持 auto_vectorize 和 WAL 模式)
-          const tasks = files.map(async (file) => {
+          const tasks = realFiles.map(async (file) => {
              try {
                 // 检查当前状态
                 const detail = await getFileDetail(file.id);
@@ -485,7 +574,7 @@ const MultiFilePreview: React.FC = () => {
               {files.map(file => (
                 <Menu.Item 
                     key={file.id} 
-                    icon={<FileTextOutlined />}
+                    icon={file.id === IMAGE_FOLDER_ID ? <FolderOutlined /> : <FileTextOutlined />}
                     style={{ height: 'auto', padding: '8px 16px', lineHeight: 1.5 }}
                 >
                   <div className={styles.fileItem}>

@@ -8,7 +8,7 @@ from sqlmodel import Session, select
 
 from app.tasks.celery_app import celery_app
 from app.core.database import engine
-from app.models import FileDocument, DocumentChunk, KnowledgeBase, FileStatus
+from app.models import FileDocument, DocumentChunk, KnowledgeBase, FileStatus, CustomModel
 from app.services.embedding import EmbeddingService
 from app.services.vector_store import VectorStoreService
 
@@ -57,13 +57,27 @@ def vectorize_file_task(self, file_id: str):
                 session.commit()
                 return {"file_id": file_id, "chunk_count": 0}
 
-            # 初始化服务
-            embedding_service = EmbeddingService()
-            vector_service = VectorStoreService()
-
             # 获取知识库信息 (为了获取 embedding_model)
             kb = session.get(KnowledgeBase, file_doc.kb_id)
             embedding_model_id = kb.embedding_model if kb else None
+
+            # 初始化服务
+            # 检查是否使用了自定义模型
+            custom_model = session.get(CustomModel, embedding_model_id) if embedding_model_id else None
+            
+            if custom_model:
+                embedding_service = EmbeddingService(
+                    base_url=custom_model.base_url,
+                    api_key=custom_model.api_key,
+                    model=custom_model.model_name
+                )
+                # 使用实际的模型名称而不是 ID
+                target_model_id = custom_model.model_name
+            else:
+                embedding_service = EmbeddingService()
+                target_model_id = embedding_model_id
+
+            vector_service = VectorStoreService()
 
             # 准备文档数据
             documents = []
@@ -90,7 +104,7 @@ def vectorize_file_task(self, file_id: str):
 
             for i in range(0, total, batch_size):
                 batch = contents[i:i + batch_size]
-                embeddings = run_async(embedding_service.embed_documents(batch, model_id=embedding_model_id))
+                embeddings = run_async(embedding_service.embed_documents(batch, model_id=target_model_id))
                 all_embeddings.extend(embeddings)
 
                 # 更新进度

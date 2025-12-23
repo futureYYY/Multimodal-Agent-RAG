@@ -255,29 +255,18 @@ const Chat: React.FC = () => {
     setInputValue('');
     setIsGenerating(true);
 
+    // 平滑输出控制
     let accumulatedContent = '';
     
-    // 平滑输出控制
-    let targetContent = ''; // 目标完整内容
-    let displayContent = ''; // 当前展示内容
+    // 动画帧 ID
     let animationFrameId: number;
 
-    const animateTypewriter = () => {
-      if (displayContent.length < targetContent.length) {
-        const remaining = targetContent.length - displayContent.length;
-        const step = remaining > 50 ? 5 : remaining > 20 ? 2 : 1;
-        
-        displayContent += targetContent.slice(displayContent.length, displayContent.length + step);
-        
-        // 使用 capturedChatMode 更新消息
+    const updateMessageContent = (content: string) => {
         const setter = capturedChatMode === 'normal' ? setNormalMessages : setAgentMessages;
         setter(prev => prev.map(msg => msg.id === assistantMessage.id ? { 
             ...msg, 
-            content: displayContent 
+            content: content 
         } : msg));
-
-        animationFrameId = requestAnimationFrame(animateTypewriter);
-      }
     };
 
     const { abort } = createChatStream(
@@ -297,7 +286,7 @@ const Chat: React.FC = () => {
         rerank_model_id: currentConfig.rerankModelId,
       },
       {
-          onAgentThought: (data) => {
+        onAgentThought: (data) => {
             const step: AgentStep = {
               type: data.step,
               content: data.content,
@@ -340,13 +329,24 @@ const Chat: React.FC = () => {
           },
         onAnswerChunk: (data) => {
           accumulatedContent += data.content;
-          targetContent = accumulatedContent;
           
-          if (displayContent.length === targetContent.length - data.content.length) {
-             animateTypewriter();
+          // 使用 requestAnimationFrame 进行节流，避免过于频繁的 setState
+          if (!animationFrameId) {
+              animationFrameId = requestAnimationFrame(() => {
+                  updateMessageContent(accumulatedContent);
+                  animationFrameId = 0;
+              });
           }
         },
         onDone: () => {
+          if (animationFrameId) {
+             cancelAnimationFrame(animationFrameId);
+             animationFrameId = 0;
+          }
+          
+          // 确保最后一次内容被更新
+          updateMessageContent(accumulatedContent);
+
           const finish = () => {
              // 这里的 updateMessage 依赖 chatMode 状态，如果用户切换了模式，会导致更新错误的消息列表
              // 应该使用 capturedChatMode
@@ -365,18 +365,15 @@ const Chat: React.FC = () => {
                  setAgentGenerating(false);
                  setAgentAbortController(null);
              }
-
-             cancelAnimationFrame(animationFrameId);
           };
 
-          if (targetContent.length - displayContent.length < 10) {
-             setTimeout(finish, 200);
-          } else {
-             finish();
-          }
+          finish();
         },
         onError: (error) => {
-          cancelAnimationFrame(animationFrameId);
+          if (animationFrameId) {
+             cancelAnimationFrame(animationFrameId);
+             animationFrameId = 0;
+          }
           console.error('Chat Error:', error);
           
           const setter = capturedChatMode === 'normal' ? setNormalMessages : setAgentMessages;

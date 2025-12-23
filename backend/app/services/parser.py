@@ -136,6 +136,8 @@ class FileParser:
             return self._parse_csv(file_path)
         elif ext == ".txt":
             return self._parse_txt(file_path)
+        elif ext in [".jpg", ".jpeg", ".png", ".bmp", ".webp"]:
+            return self._parse_image_file(file_path)
         else:
             raise ValueError(f"不支持的文件格式: {ext}")
 
@@ -455,6 +457,54 @@ class FileParser:
                 content = f.read()
         
         return self._process_text_content(content, 1)
+
+    def _parse_image_file(self, file_path: str) -> List[ParsedChunk]:
+        """解析单独的图片文件"""
+        chunks = []
+        file_name = os.path.basename(file_path)
+        # file_path format: .../kb_id/file_id_filename
+        # we need file_id
+        parts = file_name.split("_")
+        file_id = parts[0] if parts else "unknown"
+        
+        ext = os.path.splitext(file_name)[1].lower().lstrip(".")
+        if ext == "jpeg": ext = "jpg"
+        
+        try:
+            with open(file_path, "rb") as f:
+                image_bytes = f.read()
+                
+            # 保存图片到 standalone 图片目录
+            # 创建 standalone 目录
+            standalone_dir = os.path.join(self.image_dir, "standalone")
+            os.makedirs(standalone_dir, exist_ok=True)
+            
+            image_filename = f"{file_id}.{ext}"
+            image_path = os.path.join(standalone_dir, image_filename)
+            
+            with open(image_path, "wb") as f:
+                f.write(image_bytes)
+            
+            # 相对路径: kb_id/standalone/filename
+            saved_path = f"{self.kb_id}/standalone/{image_filename}"
+            
+            chunks.append(ParsedChunk(
+                content=f"[图片: {saved_path}]",
+                page_number=1,
+                content_type="image",
+                image_path=saved_path,
+                metadata={
+                    "timestamp": datetime.now().isoformat(),
+                    "original_name": file_name,
+                    "is_standalone_image": True
+                }
+            ))
+        except Exception as e:
+            print(f"Error parsing image file {file_path}: {e}")
+            # 如果出错，可能返回空或者抛出异常
+            raise e
+            
+        return chunks
 
     def _parse_excel(self, file_path: str) -> List[ParsedChunk]:
         """解析 Excel 文件"""

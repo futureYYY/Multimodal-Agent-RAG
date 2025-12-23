@@ -103,6 +103,7 @@ class ContentTypeEnum(str, Enum):
     TEXT = "text"
     TABLE = "table"
     IMAGE_MIXED = "image_mixed"
+    IMAGE = "image"
 
 
 class ChunkResponse(BaseModel):

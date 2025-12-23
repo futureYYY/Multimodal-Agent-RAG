@@ -68,6 +68,29 @@ const ChunkCard: React.FC<ChunkCardProps> = ({
 
   const imageUrl = getChunkImageUrl(chunk);
 
+   // 渲染头部
+   const renderChunkHeader = () => {
+       // 检查是否是单独上传的图片文件 (根据 metadata)
+       const isStandaloneImage = chunk.metadata?.is_standalone_image;
+       const originalName = chunk.metadata?.original_name as string | undefined;
+
+       return (
+         <div className={styles.chunkHeader} style={{ marginBottom: 4, fontSize: 12 }}>
+             <span className={styles.chunkIndex}>
+             {getChunkTypeIcon(chunk)} #{index + 1}
+             </span>
+             <div style={{ transform: 'scale(0.8)', transformOrigin: 'right center', display: 'flex', gap: 4 }}>
+                 {(chunk.contentType !== 'text' || chunk.vlmDescription) && getChunkTypeTag(chunk)}
+                 {isStandaloneImage && originalName && (
+                     <Tag color="cyan" style={{ marginRight: 0 }} title={`来自: ${originalName}`}>
+                         来自: {originalName.length > 8 ? originalName.slice(0, 8) + '...' : originalName}
+                     </Tag>
+                 )}
+             </div>
+         </div>
+       );
+   };
+
   // 计算 grid 列宽样式
   const cardStyle: React.CSSProperties = {
       width: `calc((100% - ${(columnCount - 1) * 12}px) / ${columnCount})`,
@@ -88,16 +111,7 @@ const ChunkCard: React.FC<ChunkCardProps> = ({
       hoverable
       size="small"
     >
-      <div className={styles.chunkHeader} style={{ marginBottom: 4, fontSize: 12 }}>
-        <span className={styles.chunkIndex}>
-          {getChunkTypeIcon(chunk)} #{index + 1}
-        </span>
-        {(chunk.contentType !== 'text' || chunk.vlmDescription) && (
-            <div style={{ transform: 'scale(0.8)', transformOrigin: 'left center' }}>
-                {getChunkTypeTag(chunk)}
-            </div>
-        )}
-      </div>
+      {renderChunkHeader()}
       
       <div className={styles.previewContent} style={{ 
           fontSize: 12, 

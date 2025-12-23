@@ -58,7 +58,8 @@ class ChatService:
                 break
         
         if not user_message:
-            yield ("error", {"message": "没有找到用户消息"})
+            print("DEBUG_CHAT: No user message found")
+            yield ("error", {"error": "没有找到用户消息"})
             return
 
         # Prepare LLM Service
@@ -147,7 +148,8 @@ JSON Format:
                 ):
                     yield ("answer_chunk", {"content": chunk})
              except Exception as e:
-                yield ("error", {"message": f"生成回答失败: {str(e)}"})
+                print(f"DEBUG_CHAT: Chat generation failed: {e}")
+                yield ("error", {"error": f"生成回答失败: {str(e)}"})
              
              total_duration = time.time() - total_start_time
              yield ("agent_thought", {
@@ -386,7 +388,8 @@ JSON Format:
             ):
                 yield ("answer_chunk", {"content": chunk})
         except Exception as e:
-            yield ("error", {"message": f"生成回答失败: {str(e)}"})
+            print(f"DEBUG_CHAT: Chat generation failed: {e}")
+            yield ("error", {"error": f"生成回答失败: {str(e)}"})
             return
 
         total_duration = time.time() - total_start_time
@@ -458,7 +461,8 @@ JSON Format:
                 ):
                     yield ("answer_chunk", {"content": chunk})
              except Exception as e:
-                yield ("error", {"message": f"生成回答失败: {str(e)}"})
+                print(f"DEBUG_CHAT: Chat generation failed: {e}")
+                yield ("error", {"error": f"生成回答失败: {str(e)}"})
              
              total_duration = time.time() - total_start_time
              yield ("agent_thought", {
@@ -520,7 +524,7 @@ JSON Format:
                         all_results.append(r)
         except Exception as e:
             print(f"Retrieve failed: {e}")
-            yield ("error", {"message": f"检索失败: {str(e)}"})
+            yield ("error", {"error": f"检索失败: {str(e)}"})
             return
 
         yield ("agent_thought", {
@@ -662,7 +666,8 @@ JSON Format:
             ):
                 yield ("answer_chunk", {"content": chunk})
         except Exception as e:
-            yield ("error", {"message": f"生成回答失败: {str(e)}"})
+            print(f"DEBUG_CHAT: Chat generation failed: {e}")
+            yield ("error", {"error": f"生成回答失败: {str(e)}"})
             return
 
         total_duration = time.time() - total_start_time

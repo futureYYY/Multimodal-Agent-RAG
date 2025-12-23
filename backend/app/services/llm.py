@@ -3,6 +3,7 @@ LLM 服务
 """
 
 from openai import AsyncOpenAI
+import httpx
 from typing import List, Dict, AsyncGenerator, Any
 from app.core.config import get_settings
 
@@ -22,7 +23,10 @@ class LLMService:
             self._client = AsyncOpenAI(
                 base_url=self.base_url,
                 api_key=self.api_key,
-                timeout=120.0
+                timeout=120.0,
+                http_client=httpx.AsyncClient(
+                    trust_env=False
+                )
             )
         return self._client
 

@@ -86,7 +86,7 @@ export const createChatStream = (
 
               // 如果有明确的 eventType，优先处理
               if (currentEventType === 'error') {
-                 throw new Error(eventData.error || 'Unknown error');
+                 throw new Error(eventData.error || eventData.message || 'Unknown error');
               }
 
               // 根据数据结构或 eventType 判断事件类型

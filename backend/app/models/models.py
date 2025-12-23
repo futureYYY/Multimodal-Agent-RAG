@@ -30,6 +30,7 @@ class ContentType(str, Enum):
     TEXT = "text"
     TABLE = "table"
     IMAGE_MIXED = "image_mixed"
+    IMAGE = "image"
 
 
 class KnowledgeBase(SQLModel, table=True):

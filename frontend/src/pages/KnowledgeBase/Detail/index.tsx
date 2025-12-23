@@ -447,7 +447,7 @@ const KnowledgeBaseDetail: React.FC = () => {
           <Dragger
             customRequest={handleUpload}
             showUploadList={false}
-            accept=".docx,.pdf,.xlsx,.csv,.txt"
+            accept=".docx,.pdf,.xlsx,.csv,.txt,.jpg,.jpeg,.png,.bmp,.webp"
             multiple
             disabled={uploading}
             className={styles.uploader}
@@ -457,7 +457,7 @@ const KnowledgeBaseDetail: React.FC = () => {
             </p>
             <p className="ant-upload-text">点击或拖拽文件到此处上传</p>
             <p className="ant-upload-hint">
-              支持 Word (.docx)、PDF、Excel (.xlsx)、CSV、TXT 格式
+              支持 Word (.docx)、PDF、Excel (.xlsx)、CSV、TXT、图片 格式
             </p>
           </Dragger>
 

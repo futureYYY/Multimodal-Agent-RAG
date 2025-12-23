@@ -3,6 +3,7 @@ Rerank 服务模块
 """
 
 from openai import OpenAI
+import httpx
 import json
 import re
 from typing import List, Dict, Any, Optional
@@ -92,7 +93,10 @@ class RerankService:
         """通过 API 调用 Rerank"""
         client = OpenAI(
             base_url=model.base_url,
-            api_key=model.api_key
+            api_key=model.api_key,
+            http_client=httpx.Client(
+                trust_env=False
+            )
         )
 
         prompt = f"""你是一个文本相关性重排序模型，请计算查询与每个候选文本的相关性得分（0-1，越接近1越相关）。

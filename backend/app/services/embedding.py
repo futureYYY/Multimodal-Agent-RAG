@@ -53,8 +53,8 @@ class EmbeddingService:
              print("DEBUG_EMBED: API Key: None")
 
         try:
-            # 增加超时时间，并关闭 verify
-            async with httpx.AsyncClient(timeout=60.0, verify=False) as client:
+            # 增加超时时间，并关闭 verify，禁用环境变量（代理）
+            async with httpx.AsyncClient(timeout=60.0, verify=False, trust_env=False) as client:
                 response = await client.post(
                     url,
                     headers={
@@ -223,7 +223,8 @@ class EmbeddingService:
                     },
                     json=payload,
                     timeout=120.0, 
-                    verify=False
+                    verify=False,
+                    proxies={"http": None, "https": None} # 显式禁用代理
                 )
 
                 if response.status_code != 200:

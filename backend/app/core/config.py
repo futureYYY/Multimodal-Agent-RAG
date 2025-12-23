@@ -50,7 +50,7 @@ class Settings(BaseSettings):
 
     # 文件限制
     MAX_FILE_SIZE: int = 100 * 1024 * 1024  # 100MB
-    ALLOWED_EXTENSIONS: List[str] = [".pdf", ".docx", ".xlsx", ".csv", ".txt"]
+    ALLOWED_EXTENSIONS: List[str] = [".pdf", ".docx", ".xlsx", ".csv", ".txt", ".jpg", ".jpeg", ".png", ".bmp", ".webp"]
 
     class Config:
         env_file = ".env"

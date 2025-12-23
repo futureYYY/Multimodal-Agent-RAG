@@ -7,7 +7,7 @@ from sqlmodel import Session
 from typing import List
 
 from app.core.database import get_session
-from app.models import KnowledgeBase
+from app.models import KnowledgeBase, CustomModel
 from app.schemas import RecallRequest, RecallResult, ApiResponse, RecallTestResponse
 from app.services.vector_store import VectorStoreService
 from app.services.embedding import EmbeddingService
@@ -40,8 +40,19 @@ async def recall_test(
 
     try:
         # 获取查询向量
-        embedding_service = EmbeddingService()
-        query_vector = await embedding_service.embed_query(data.query)
+        # 检查是否使用了自定义模型
+        custom_model = session.get(CustomModel, kb.embedding_model)
+        if custom_model:
+            embedding_service = EmbeddingService(
+                base_url=custom_model.base_url,
+                api_key=custom_model.api_key,
+                model=custom_model.model_name
+            )
+            query_vector = await embedding_service.embed_query(data.query)
+        else:
+            embedding_service = EmbeddingService()
+            # 如果不是自定义模型ID，则直接使用 kb.embedding_model 作为模型名称
+            query_vector = await embedding_service.embed_query(data.query, model_id=kb.embedding_model)
 
         # 执行向量检索
         vector_service = VectorStoreService()
@@ -59,7 +70,6 @@ async def recall_test(
                 # 仅提取文本内容作为候选
                 candidates = [r["content"] for r in results]
                 
-                from app.models import CustomModel
                 rerank_model = None
                 if data.rerank_model_id:
                     rerank_model = session.get(CustomModel, data.rerank_model_id)
